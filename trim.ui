@@ -228,6 +228,8 @@
     </property>
     <addaction name="action_encode_web_mp4"/>
     <addaction name="action_encode_folder"/>
+    <addaction name="action_internal_hard_subs"/>
+    <addaction name="action_external_hard_subs"/>
    </widget>
    <widget class="QMenu" name="menuPresets">
     <property name="title">
@@ -303,6 +305,16 @@
   <action name="action_extract_subs">
    <property name="text">
     <string>Subs</string>
+   </property>
+  </action>
+  <action name="action_internal_hard_subs">
+   <property name="text">
+    <string>Internal Hard Subs</string>
+   </property>
+  </action>
+  <action name="action_external_hard_subs">
+   <property name="text">
+    <string>External hard Subs</string>
    </property>
   </action>
  </widget>
