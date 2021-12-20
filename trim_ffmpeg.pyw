@@ -72,7 +72,8 @@ def seconds_format(_seconds):
 
 def calculate_duration(_end_time, _start_time):
     _format = '%H:%M:%S'
-    _duration = datetime.strptime(_end_time, _format) - datetime.strptime(_start_time, _format)
+    _duration = datetime.strptime(
+        _end_time, _format) - datetime.strptime(_start_time, _format)
     return f'{_duration}'
 
 
@@ -82,9 +83,10 @@ def get_video_duration(_input):
     :param _input: video input
     :return: video duration as a float
     """
+    _task = ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1',
+             _input]
     result = subprocess.run(
-        ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1',
-         _input], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        _task, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     return float(result.stdout)
 
 
@@ -144,29 +146,31 @@ def trim_with_hard_subs(_start, _end, _video_input, _output, subs_input='', vide
     """
     _base_dir = os.path.split(_video_input)[0]
     _base_name = os.path.split(_video_input)[1]
+    _temp_subtitle = 'temp_subtitle.srt'
     if not subs_input:
         # internal subs
-        _extract_subtitle = extract_subtitle(_video_input, f'temp_subtitle.srt', subtitle_channel)
+        _extract_subtitle = extract_subtitle(
+            _video_input, _temp_subtitle, subtitle_channel)
     else:
         # external subs
-        copyfile(subs_input, f'temp_subtitle.srt')
+        copyfile(subs_input, _temp_subtitle)
 
     trim_with_subs_task = [FFMPEG_PATH,
                            '-ss', _start,
                            '-to', _end,
                            '-copyts',
                            '-i', _video_input,
-                           '-vf', f'subtitles=temp_subtitle.srt',
+                           '-vf', f"subtitles={_temp_subtitle}:force_style='Fontsize=14'",
                            '-map', f'0:v:{video_channel}',
                            '-map', f'0:a:{audio_channel}',
-                           '-c:s', 'srt',
+                           '-c:s', 'copy',
                            '-c:a', 'copy',
                            '-ss', _start,
                            _output]
 
     print('Processing trim_with_hard_subs')
     subprocess.run(trim_with_subs_task)
-    os.remove(f'temp_subtitle.srt')
+    os.remove(_temp_subtitle)
 
 
 def encode_with_hard_subs(_video_input, _output, subs_input='', video_channel=0, audio_channel=0,
@@ -184,14 +188,15 @@ def encode_with_hard_subs(_video_input, _output, subs_input='', video_channel=0,
     _base_name = os.path.split(_video_input)[1]
     if not subs_input:
         # internal subs
-        _extract_subtitle = extract_subtitle(_video_input, f'temp_subtitle.srt', subtitle_channel)
+        _extract_subtitle = extract_subtitle(
+            _video_input, f'temp_subtitle.srt', subtitle_channel)
     else:
         # external subs
         copyfile(subs_input, f'temp_subtitle.srt')
 
     hard_subs_task = [FFMPEG_PATH,
                       '-i', _video_input,
-                      '-vf', f"subtitles=temp_subtitle.srt:force_style='Fontsize=28'",
+                      '-vf', f"subtitles=temp_subtitle.srt",
                       '-map', f'0:v:{video_channel}',
                       '-map', f'0:a:{audio_channel}',
                       '-c:a', 'copy',
@@ -262,6 +267,19 @@ def to_gif(_input, _output):
     subprocess.run(_task)
     print('Gif conversion done!')
 
+# todo
+
+
+def burn_subs(_input, _output):
+    _input = _input.replace('\\', '\/')
+    _task = [FFMPEG_PATH,
+             '-i', _input,
+             '-vf', f"subtitles={_input[:-4]}.srt",
+             '-preset', 'ultrafast',
+             '-c:a', 'copy',
+             _output]
+    subprocess.run(_task)
+
 
 def folder_encode(_media_folder, _encoded_folder):
     if not os.path.exists(_encoded_folder):
@@ -269,7 +287,8 @@ def folder_encode(_media_folder, _encoded_folder):
     directory = os.listdir(_media_folder)
     for filename in directory:
         if filename[-3:].lower() in SUPPORTED_MEDIA:
-            encode_web_mp4(f'{_media_folder}\\{filename}', f'{_encoded_folder}\\{filename[:len(filename) - 4]}.mp4')
+            encode_web_mp4(f'{_media_folder}\\{filename}',
+                           f'{_encoded_folder}\\{filename[:len(filename) - 4]}.mp4')
 
 
 def clean_text(_text):
@@ -343,7 +362,8 @@ def _my_presets(_video_location, _subs_location, _output, _start_time, _end_time
 
     video_duration = calculate_duration(end_time, start_time)
     temp_duration_output = f'{output_base_path}/temp_duration_{output_file_name}'
-    trim_duration('00:00:00', video_duration, temp_mp4_output, temp_duration_output)
+    trim_duration('00:00:00', video_duration,
+                  temp_mp4_output, temp_duration_output)
     # clean temp file
     os.remove(temp_mp4_output)
 
@@ -373,14 +393,17 @@ class MyEncodesWorker(QThread):
 
 def _encode(_video_location, _subs_location, _output, _subs_status, _audio_channel=0, _subs_channel=0):
     if 'external' in _subs_status:
-        encode_with_hard_subs(_video_location, _output, subs_input=_subs_location, audio_channel=_audio_channel)
+        encode_with_hard_subs(
+            _video_location, _output, subs_input=_subs_location, audio_channel=_audio_channel)
     else:
-        encode_with_hard_subs(_video_location, _output, audio_channel=_audio_channel, subtitle_channel=_subs_channel)
+        encode_with_hard_subs(
+            _video_location, _output, audio_channel=_audio_channel, subtitle_channel=_subs_channel)
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
-        super(MainWindow, self).__init__()  # Call the inherited classes __init__ method
+        # Call the inherited classes __init__ method
+        super(MainWindow, self).__init__()
         _main_window = resource_path(main_gui)
         uic.loadUi(_main_window, self)  # Load the .ui file
 
@@ -393,11 +416,16 @@ class MainWindow(QMainWindow):
         self.action_to_gif.triggered.connect(self._to_gif)
         self.action_encode_web_mp4.triggered.connect(self._encode_web_mp4)
         self.action_encode_folder.triggered.connect(self._encode_folder)
-        self.action_presets_external_subs.triggered.connect(self._external_trim)
-        self.action_presets_internal_subs.triggered.connect(self._internal_trim)
+        self.action_presets_external_subs.triggered.connect(
+            self._external_trim)
+        self.action_presets_internal_subs.triggered.connect(
+            self._internal_trim)
+        self.action_presets_loop.triggered.connect(self._loop)
         self.action_extract_subs.triggered.connect(self._extract_subs)
-        self.action_internal_hard_subs.triggered.connect(self._encode_internal_hard_subs)
-        self.action_external_hard_subs.triggered.connect(self._encode_external_hard_subs)
+        self.action_internal_hard_subs.triggered.connect(
+            self._encode_internal_hard_subs)
+        self.action_external_hard_subs.triggered.connect(
+            self._encode_external_hard_subs)
 
         self.video_location = ''
         self.subs_location = ''
@@ -405,16 +433,22 @@ class MainWindow(QMainWindow):
         self.show()  # Show the GUI
 
     def test(self):
-        _output = QFileDialog.getSaveFileName(self, 'Save File', self.video_location)[0]
+        _output = QFileDialog.getSaveFileName(
+            self, 'Save File', self.video_location)[0]
         _video_duration = int(get_video_duration(self.video_location))
         fade(self.video_location, _output, _video_duration)
 
     def browse_video(self):
-        if sys.argv[1] is not None:
-            self.video_location = sys.argv[1]
+        if self.txt_video_location.text():
+            self.video_location = self.txt_video_location.text()
         else:
-            self.video_location = QFileDialog.getOpenFileName(self, 'Open Video', '.',
-                                                              QT_DIALOGUE_FILTER)[0]
+            try:
+                self.video_location = sys.argv[1]
+            except IndexError:
+                print(
+                    'no file was sent, if no path is given as input, an open file dialog will appear')
+                self.video_location = QFileDialog.getOpenFileName(self, 'Open Video', '.',
+                                                                  QT_DIALOGUE_FILTER)[0]
 
         self.txt_video_location.setText(self.video_location)
         self.btn_subs_select.setEnabled(True)
@@ -427,16 +461,19 @@ class MainWindow(QMainWindow):
         self.txt_subs_location.setText(self.subs_location)
 
     def _to_gif(self):
-        _output = QFileDialog.getSaveFileName(self, 'Save File', self.video_location)[0]
-        to_gif(self.video_location, _output)
+        _output = QFileDialog.getSaveFileName(
+            self, 'Save File', self.video_location)[0]
+        burn_subs(self.video_location, _output)
 
     def _extract_subs(self):
         _filter = "Subtitle(*.srt *.ass *.sub)"
-        _output = QFileDialog.getSaveFileName(self, 'Save File', self.video_location[-4], _filter)[0]
+        _output = QFileDialog.getSaveFileName(
+            self, 'Save File', self.video_location[-4], _filter)[0]
         extract_subtitle(self.video_location, _output, 0)
 
     def _trim(self):
-        _output = QFileDialog.getSaveFileName(self, 'Save File', self.video_location)[0]
+        _output = QFileDialog.getSaveFileName(
+            self, 'Save File', self.video_location)[0]
         start_time = duration_format(self.start_time.time())
         end_time = duration_format(self.end_time.time())
         trim_basic(start_time, end_time, self.video_location, _output)
@@ -446,11 +483,13 @@ class MainWindow(QMainWindow):
         # the name of the file, because i'll be using the name i clean it
         input_file_name = clean_text(os.path.split(self.video_location)[1])
         _save_path = f'{input_base_path}\\{input_file_name[:-4]}'
-        _output = QFileDialog.getSaveFileName(self, 'Save File', _save_path, QT_DIALOGUE_FILTER)[0]
+        _output = QFileDialog.getSaveFileName(
+            self, 'Save File', _save_path, QT_DIALOGUE_FILTER)[0]
         encode_web_mp4(self.video_location, _output)
 
     def _encode_folder(self):
-        _output = QFileDialog.getExistingDirectory(self, 'Select directory', self.video_location)
+        _output = QFileDialog.getExistingDirectory(
+            self, 'Select directory', self.video_location)
         input_base_path = os.path.split(self.video_location)[0]
         _folder_thread = threading.Thread(target=folder_encode,
                                           args=(input_base_path, _output))
@@ -467,7 +506,8 @@ class MainWindow(QMainWindow):
         # the name of the file, because i'll be using the name i clean it
         input_file_name = clean_text(os.path.split(self.video_location)[1])
         _save_path = f'{input_base_path}\\{input_file_name[:-4]}'
-        _output = QFileDialog.getSaveFileName(self, 'Save File', _save_path, QT_DIALOGUE_FILTER)[0]
+        _output = QFileDialog.getSaveFileName(
+            self, 'Save File', _save_path, QT_DIALOGUE_FILTER)[0]
         _audio_channel = int(self.txt_audio_channel.text())
         _subs_channel = int(self.txt_subs_channel.text())
         self.preset_thread = MyEncodesWorker(self.video_location, self.subs_location, _output, _subs_status,
@@ -480,6 +520,10 @@ class MainWindow(QMainWindow):
     def _internal_trim(self):
         self.my_presets('internal')
 
+    def _loop(self):
+        loop_task = 'ffmpeg -stream_loop 15 -i metal.mp4 -c copy output.mp4'
+        subprocess.run(loop_task)
+
     def my_presets(self, _subs_status):
         # the path of the file directory
         input_base_path = os.path.split(self.video_location)[0]
@@ -489,9 +533,12 @@ class MainWindow(QMainWindow):
         # the path that will be open when the save dialog shows
         _save_path = f'{input_base_path}\\{input_file_name[:-4]}'
         # this will open up a save dialog and the save path will be stored in _output
-        _output = QFileDialog.getSaveFileName(self, 'Save File', _save_path, QT_DIALOGUE_FILTER)[0]
+        _output = QFileDialog.getSaveFileName(
+            self, 'Save File', _save_path, QT_DIALOGUE_FILTER)[0]
+
         # empty the argv so that the user can select another file
-        sys.argv[1] = ''
+        # sys.argv[1] = ''
+
         # getting the time to start the trim_basic from the gui interface
         start_time = self.start_time.time()
         # getting the time to end the trim_basic from the gui interface

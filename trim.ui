@@ -217,10 +217,10 @@
     <property name="title">
      <string>Trim</string>
     </property>
-    <addaction name="action_trim_external_subs"/>
-    <addaction name="action_trim_internal_subs"/>
-    <addaction name="action_trim_duration"/>
     <addaction name="action_trim"/>
+    <addaction name="action_trim_duration"/>
+    <addaction name="action_trim_internal_subs"/>
+    <addaction name="action_trim_external_subs"/>
    </widget>
    <widget class="QMenu" name="menuEncode">
     <property name="title">
@@ -235,8 +235,9 @@
     <property name="title">
      <string>Presets</string>
     </property>
-    <addaction name="action_presets_external_subs"/>
     <addaction name="action_presets_internal_subs"/>
+    <addaction name="action_presets_external_subs"/>
+    <addaction name="action_presets_loop"/>
    </widget>
    <widget class="QMenu" name="menuGif">
     <property name="title">
@@ -289,7 +290,7 @@
   </action>
   <action name="action_trim">
    <property name="text">
-    <string>Trim</string>
+    <string>Basic</string>
    </property>
   </action>
   <action name="action_to_gif">
@@ -315,6 +316,11 @@
   <action name="action_external_hard_subs">
    <property name="text">
     <string>External hard Subs</string>
+   </property>
+  </action>
+  <action name="action_presets_loop">
+   <property name="text">
+    <string>loop</string>
    </property>
   </action>
  </widget>
