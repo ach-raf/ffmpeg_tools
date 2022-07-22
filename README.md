@@ -1,6 +1,6 @@
 # ffmpeg_tools
 
-![Program interface](screenshots/2022-07-22 14_51_26-Window.png)
+![main window](screenshots/main_window.png)
 
 - PYQT5 Project that uses ffmpeg to encode videos to mp4 and lower the size.
 
