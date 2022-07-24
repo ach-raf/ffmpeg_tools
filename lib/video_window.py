@@ -80,7 +80,8 @@ class VideoWindow(QMainWindow):
         open_video_action.setStatusTip("Open video")
         open_video_action.triggered.connect(self.open_video)
 
-        open_subtitle_action = QAction(QIcon("open.png"), "&Open subtitle", self)
+        open_subtitle_action = QAction(
+            QIcon("open.png"), "&Open subtitle", self)
         open_subtitle_action.setStatusTip("Open subtitle")
         open_subtitle_action.triggered.connect(self.open_subtitle)
 
@@ -118,11 +119,13 @@ class VideoWindow(QMainWindow):
 
         trim_internal_subs_action = QAction("Internal subtitles", self)
         trim_internal_subs_action.setStatusTip("Internal subtitles")
-        trim_internal_subs_action.triggered.connect(self.trim_with_internal_subs)
+        trim_internal_subs_action.triggered.connect(
+            self.trim_with_internal_subs)
 
         trim_external_subs_action = QAction("External subtitles", self)
         trim_external_subs_action.setStatusTip("External subtitles")
-        trim_external_subs_action.triggered.connect(self.trim_with_external_subs)
+        trim_external_subs_action.triggered.connect(
+            self.trim_with_external_subs)
 
         hard_subs_action.addAction(trim_internal_subs_action)
         hard_subs_action.addAction(trim_external_subs_action)
@@ -134,7 +137,8 @@ class VideoWindow(QMainWindow):
 
         # Create batch extract subtitles action
         extract_susbs_action = QAction("Extract subtitles", self)
-        extract_susbs_action.setStatusTip("Extract all subtitles inside a folder")
+        extract_susbs_action.setStatusTip(
+            "Extract all subtitles inside a folder")
         extract_susbs_action.triggered.connect(self.batch_extract_subs)
 
         # Create encoding menu bar and add encoding action
@@ -181,11 +185,13 @@ class VideoWindow(QMainWindow):
         # Create trim_preset action
         trim_internal_preset_action = QAction("Trim internal preset", self)
         trim_internal_preset_action.setStatusTip("Trim internal preset")
-        trim_internal_preset_action.triggered.connect(self.trim_internal_preset)
+        trim_internal_preset_action.triggered.connect(
+            self.trim_internal_preset)
 
         trim_external_preset_action = QAction("Trim external preset", self)
         trim_external_preset_action.setStatusTip("Trim external preset")
-        trim_external_preset_action.triggered.connect(self.trim_external_preset)
+        trim_external_preset_action.triggered.connect(
+            self.trim_external_preset)
 
         # Create presets menu bar and add trim_preset action
         presets_menu = menu_bar.addMenu("&Presets")
@@ -194,7 +200,8 @@ class VideoWindow(QMainWindow):
 
         self.play_button = QPushButton()
         self.play_button.setEnabled(False)
-        self.play_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
+        self.play_button.setIcon(
+            self.style().standardIcon(QStyle.SP_MediaPlay))
         self.play_button.clicked.connect(self.play)
 
         self.position_slider = QSlider(Qt.Horizontal)
@@ -217,7 +224,8 @@ class VideoWindow(QMainWindow):
         )
         self.label_file_location.move(100, 100)
 
-        self.label_subtitle_location = QLabel("No subtitle has been selected", self)
+        self.label_subtitle_location = QLabel(
+            "No subtitle has been selected", self)
         self.label_subtitle_location.setSizePolicy(
             QSizePolicy.Preferred, QSizePolicy.Maximum
         )
@@ -229,7 +237,8 @@ class VideoWindow(QMainWindow):
         )
         self.audio_channel_select = QSpinBox()
         self.audio_channel_select.setRange(0, 99)
-        self.audio_channel_select.valueChanged.connect(self.audio_channel_value_change)
+        self.audio_channel_select.valueChanged.connect(
+            self.audio_channel_value_change)
 
         self.label_subtitle_channel = QLabel("Subtitle channel: ", self)
         self.label_subtitle_channel.setSizePolicy(
@@ -242,13 +251,16 @@ class VideoWindow(QMainWindow):
         )
 
         self.label_trim_start = QLabel("Trim start:", self)
-        self.label_trim_start.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+        self.label_trim_start.setSizePolicy(
+            QSizePolicy.Preferred, QSizePolicy.Maximum)
 
         self.label_trim_end = QLabel("Trim end:", self)
-        self.label_trim_end.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+        self.label_trim_end.setSizePolicy(
+            QSizePolicy.Preferred, QSizePolicy.Maximum)
 
         self.error_label = QLabel()
-        self.error_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+        self.error_label.setSizePolicy(
+            QSizePolicy.Preferred, QSizePolicy.Maximum)
 
         menu_bar = self.menuBar()
 
@@ -269,7 +281,8 @@ class VideoWindow(QMainWindow):
 
         # creating trim end widget
         self.trim_end_date_time_edit = QTimeEdit(self)
-        self.trim_end_date_time_edit.dateTimeChanged.connect(self.trim_end_value_change)
+        self.trim_end_date_time_edit.dateTimeChanged.connect(
+            self.trim_end_value_change)
         self.trim_end_date_time_edit.setDisplayFormat("hh:mm:ss")
         self.trim_end_date_time_edit.setGeometry(100, 100, 150, 35)
         time = QTime(0, 0, 0)
@@ -293,17 +306,22 @@ class VideoWindow(QMainWindow):
         # choices_first_row_horizontal_layout.addStretch()
         choices_first_row_horizontal_layout.setContentsMargins(10, 1, 10, 1)
         choices_first_row_horizontal_layout.addWidget(self.label_trim_start)
-        choices_first_row_horizontal_layout.addWidget(self.trim_start_date_time_edit)
+        choices_first_row_horizontal_layout.addWidget(
+            self.trim_start_date_time_edit)
         choices_first_row_horizontal_layout.addWidget(self.label_audio_channel)
-        choices_first_row_horizontal_layout.addWidget(self.audio_channel_select)
+        choices_first_row_horizontal_layout.addWidget(
+            self.audio_channel_select)
 
         choices_second_row_horizontal_layout = QHBoxLayout()
         choices_second_row_horizontal_layout.setContentsMargins(10, 1, 10, 1)
         choices_second_row_horizontal_layout.addWidget(self.label_trim_end)
-        choices_second_row_horizontal_layout.addWidget(self.trim_end_date_time_edit)
+        choices_second_row_horizontal_layout.addWidget(
+            self.trim_end_date_time_edit)
 
-        choices_second_row_horizontal_layout.addWidget(self.label_subtitle_channel)
-        choices_second_row_horizontal_layout.addWidget(self.subtitle_channel_select)
+        choices_second_row_horizontal_layout.addWidget(
+            self.label_subtitle_channel)
+        choices_second_row_horizontal_layout.addWidget(
+            self.subtitle_channel_select)
 
         channel_select_layout = QVBoxLayout()
         channel_select_layout.addLayout(choices_first_row_horizontal_layout)
@@ -329,15 +347,13 @@ class VideoWindow(QMainWindow):
 
     def set_media(self):
         if self.media_info.file_location != "":
+            print(self.media_info.file_location)
             self.video_player.setSource(self.media_info.file_location)
             self.play_button.setEnabled(True)
             self.label_file_location.setText(self.media_info.file_location)
             # self.video_player.setActiveSubtitleTrack(0)
             """for track in self.video_player.subtitleTracks():
                 print(f"{track=}")"""
-            """self.play()
-            time.sleep(0.01)
-            self.play()"""
 
             if os.path.isfile(f"{self.media_info.file_location[:-4]}.srt"):
                 self.label_subtitle_location.setText(
@@ -386,7 +402,8 @@ class VideoWindow(QMainWindow):
         _result = self.select_subtitle()
         if _result:
             self.media_info.subtitle_location
-            self.label_subtitle_location.setText(self.media_info.subtitle_location)
+            self.label_subtitle_location.setText(
+                self.media_info.subtitle_location)
 
     def exit_call(self, app):
         sys.exit(app.exec())
@@ -395,10 +412,12 @@ class VideoWindow(QMainWindow):
         global PLAY_PAUSE_STATE
         if PLAY_PAUSE_STATE % 2 == 0:
             self.video_player.play()
-            self.play_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
+            self.play_button.setIcon(
+                self.style().standardIcon(QStyle.SP_MediaPlay))
         else:
             self.video_player.pause()
-            self.play_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPause))
+            self.play_button.setIcon(
+                self.style().standardIcon(QStyle.SP_MediaPause))
 
         PLAY_PAUSE_STATE += 1
 
@@ -442,7 +461,8 @@ class VideoWindow(QMainWindow):
         _output = self.save_video(GIF_FILTER)
         if _output:
             _to_gif_thread = threading.Thread(
-                target=encoding.to_gif, args=(self.media_info.file_location, _output)
+                target=encoding.to_gif, args=(
+                    self.media_info.file_location, _output)
             )
             _to_gif_thread.start()
 
@@ -479,18 +499,21 @@ class VideoWindow(QMainWindow):
 
     def loop_video(self):
         _output = self.save_video(VIDEO_FILTER)
+        _mp4_temp_path = "converting_to_mp4.mp4"
         _gif_flag = False
         if _output:
             _get_time = self.get_number_of_loops()
             if _get_time:
                 if "gif" in self.media_info.file_location:
                     _gif_flag = True
-                    _mp4_temp_path = "converting_to_mp4.mp4"
-                    encoding.gif_to_mp4(self.media_info.file_location, _mp4_temp_path)
+                    encoding.gif_to_mp4(
+                        self.media_info.file_location, _mp4_temp_path)
+                if _gif_flag:
+                    self.media_info.file_location = _mp4_temp_path
                 _loop_video_thread = threading.Thread(
                     target=encoding.loop_video,
                     args=(
-                        _mp4_temp_path,
+                        self.media_info.file_location,
                         _output,
                         self.number_of_loops,
                         _gif_flag,

@@ -70,7 +70,8 @@ def get_video_duration(_input):
         "default=noprint_wrappers=1:nokey=1",
         _input,
     ]
-    result = subprocess.run(_task, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    result = subprocess.run(
+        _task, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     return float(result.stdout)
 
 
@@ -159,7 +160,8 @@ def burn_subtitles(_input, _output, _subtitle_channel=0, _subtitle_path=""):
         # external subs
     else:
         # internal subs
-        _extract_subtitle = extract_subtitle(_input, _temp_subtitle, _subtitle_channel)
+        _extract_subtitle = extract_subtitle(
+            _input, _temp_subtitle, _subtitle_channel)
 
     _task = [
         FFMPEG_PATH,
@@ -167,7 +169,7 @@ def burn_subtitles(_input, _output, _subtitle_channel=0, _subtitle_path=""):
         _input,
         #'-vf', f"subtitles={_temp_subtitle}:force_style='Fontsize=6'",
         "-vf",
-        f"subtitles={_temp_subtitle}:force_style='Fontsize=6'",
+        f"subtitles={_temp_subtitle}",
         "-preset",
         "ultrafast",
         "-c:a",
@@ -183,7 +185,8 @@ def burn_subtitles(_input, _output, _subtitle_channel=0, _subtitle_path=""):
 
 def to_gif(_input, _output):
     if _output:
-        _task = [FFMPEG_PATH, "-i", _input, "-vf", "fps=30", "-loop", "0", _output]
+        _task = [FFMPEG_PATH, "-i", _input, "-vf",
+                 "fps=30", "-loop", "0", _output]
         print("Starting gif conversion")
         subprocess.run(_task)
         print("Gif conversion done!")
@@ -442,7 +445,8 @@ def trim_preset(
     # output_file_name = clean_text(output_file_name)
 
     # path for the temporary trim_basic
-    temp_trim_output = os.path.join(output_base_path, f"basic_{input_file_name}")
+    temp_trim_output = os.path.join(
+        output_base_path, f"basic_{input_file_name}")
 
     if "external" in _subs_status:
         trim_with_hard_subs(
@@ -463,7 +467,8 @@ def trim_preset(
             subtitle_channel=_subs_channel,
         )
 
-    temp_mp4_output = os.path.join(output_base_path, f"encode_{output_file_name}")
+    temp_mp4_output = os.path.join(
+        output_base_path, f"encode_{output_file_name}")
     encode_web_mp4(temp_trim_output, temp_mp4_output)
     # clean temp file
     os.remove(temp_trim_output)
@@ -473,7 +478,8 @@ def trim_preset(
     temp_duration_output = os.path.join(
         output_base_path, f"duration_{output_file_name}"
     )
-    trim_duration("00:00:00", video_duration, temp_mp4_output, temp_duration_output)
+    trim_duration("00:00:00", video_duration,
+                  temp_mp4_output, temp_duration_output)
     # clean temp file
     os.remove(temp_mp4_output)
 
