@@ -9,8 +9,12 @@
 # Requirements:
 
 -Python 3.
--Git (for clonging)
+
+-Git (for cloning)
+
 -pip
+
+-virtualenv (you can install it using `pip install virtualenv`)
 
 # Installation Guide:
 
