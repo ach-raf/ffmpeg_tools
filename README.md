@@ -12,6 +12,6 @@
 -Git (for clonging)
 -pip
 
-# Insttalation Guide:
+# Installation Guide:
 
 ![installation guide](screenshots/installation_guide.gif)
