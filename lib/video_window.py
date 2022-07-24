@@ -337,11 +337,15 @@ class VideoWindow(QMainWindow):
         # self.media_player.error.connect(self.handle_error)
 
     def set_media(self):
+        global PLAY_PAUSE_STATE
         if self.media_info.file_location != "":
             print(self.media_info.file_location)
             self.video_player.setSource(self.media_info.file_location)
             self.play_button.setEnabled(True)
             self.label_file_location.setText(self.media_info.file_location)
+            self.play_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPause))
+            PLAY_PAUSE_STATE = 0
+
             # self.video_player.setActiveSubtitleTrack(0)
             """for track in self.video_player.subtitleTracks():
                 print(f"{track=}")"""
