@@ -6,6 +6,7 @@ from dataclasses import dataclass
 class MediaInfo:
     file_location: str = ""
     subtitle_location: str = ""
+    video_channel: str = "0"
     audio_channel: str = "0"
     subtitle_channel: str = "0"
     trim_start: str = "00:00:00"

@@ -1,5 +1,5 @@
 import sys
-from PyQt5.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication
 
 import lib.video_window as video_window
 
@@ -14,7 +14,7 @@ def main():
         player.set_media()
     print(player.media_info.file_location)
     player.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":

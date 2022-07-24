@@ -1,3 +1,1 @@
-PyQt5==5.15.6
-pyqt5-tools
-PyQt5Designer
+PySide6

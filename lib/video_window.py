@@ -2,12 +2,12 @@ import sys
 import os
 import time
 
-from PyQt5.QtWidgets import QFileDialog, QMainWindow
+from PySide6.QtWidgets import QFileDialog, QMainWindow
 
-from PyQt5.QtCore import QDir, Qt, QUrl, QDateTime, QTime
-from PyQt5.QtMultimedia import QMediaContent, QMediaPlayer
-from PyQt5.QtMultimediaWidgets import QVideoWidget
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QDir, Qt, QUrl, QDateTime, QTime
+from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
+from PySide6.QtMultimediaWidgets import QVideoWidget
+from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -19,9 +19,9 @@ from PyQt5.QtWidgets import (
     QSpinBox,
     QDateTimeEdit,
     QTimeEdit,
+    QInputDialog,
 )
-from PyQt5.QtWidgets import QAction
-from PyQt5.QtGui import QIcon
+from PySide6.QtGui import QIcon, QAction
 
 import datetime
 import lib.media_info as media_info
@@ -35,9 +35,11 @@ import threading
 # -------------------------------------------------------------------------------
 APP_NAME = "Ffmpeg encoder"
 # Qdialogue filter
-VIDEO_FILTER = "Videos(*.mp4 *.mkv *.avi *.mov)"
+VIDEO_FILTER = "Videos(*.mp4 *.mkv *.avi *.mov *.gif)"
 SUB_FILTER = "Subtitle(*.srt *.ass *.sub)"
 GIF_FILTER = "GIF(*.gif)"
+PLAY_PAUSE_STATE = 0
+# -------------------------------------------------------------------------------
 
 
 def time_select_format(time):
@@ -66,9 +68,129 @@ class VideoWindow(QMainWindow):
 
         self.media_info = media_info.MediaInfo()
 
-        self.media_player = QMediaPlayer(None, QMediaPlayer.VideoSurface)
+        self.video_player = QMediaPlayer()
+        self.audio_player = QAudioOutput()
+        self.video_player.setAudioOutput(self.audio_player)
 
         video_widget = QVideoWidget()
+
+        # Create open action
+        open_video_action = QAction(QIcon("open.png"), "&Open video", self)
+        open_video_action.setShortcut("Ctrl+O")
+        open_video_action.setStatusTip("Open video")
+        open_video_action.triggered.connect(self.open_video)
+
+        open_subtitle_action = QAction(QIcon("open.png"), "&Open subtitle", self)
+        open_subtitle_action.setStatusTip("Open subtitle")
+        open_subtitle_action.triggered.connect(self.open_subtitle)
+
+        # Create exit action
+        exit_action = QAction(QIcon("exit.png"), "&Exit", self)
+        exit_action.setShortcut("Ctrl+Q")
+        exit_action.setStatusTip("Exit application")
+        exit_action.triggered.connect(self.exit_call)
+
+        menu_bar = self.menuBar()
+        # add FILE menu and add open and exit action
+        file_menu = menu_bar.addMenu("&File")
+        # fileMenu.addAction(newAction)
+        file_menu.addAction(open_video_action)
+        file_menu.addAction(open_subtitle_action)
+        file_menu.addAction(exit_action)
+
+        # Create trim_menu_bar and add basic trim action
+        trim_menu = menu_bar.addMenu("&Trim")
+
+        # Create basic trim action
+        trim_basic_action = QAction("Basic", self)
+        trim_basic_action.setStatusTip("Basic trim")
+        trim_basic_action.triggered.connect(self.trim_basic)
+
+        trim_duration_action = QAction("Duration", self)
+        trim_duration_action.setStatusTip("Trim with duration (in seconds)")
+        trim_duration_action.triggered.connect(self.trim_duration)
+
+        trim_menu.addAction(trim_basic_action)
+        trim_menu.addAction(trim_duration_action)
+
+        hard_subs_action = trim_menu.addMenu("With hard subtitles")
+        hard_subs_action.setStatusTip("Trim with hard subtitles")
+
+        trim_internal_subs_action = QAction("Internal subtitles", self)
+        trim_internal_subs_action.setStatusTip("Internal subtitles")
+        trim_internal_subs_action.triggered.connect(self.trim_with_internal_subs)
+
+        trim_external_subs_action = QAction("External subtitles", self)
+        trim_external_subs_action.setStatusTip("External subtitles")
+        trim_external_subs_action.triggered.connect(self.trim_with_external_subs)
+
+        hard_subs_action.addAction(trim_internal_subs_action)
+        hard_subs_action.addAction(trim_external_subs_action)
+
+        # Create batch encoding action
+        encoding_action = QAction("Encode mp4", self)
+        encoding_action.setStatusTip("Encode all videos inside a folder")
+        encoding_action.triggered.connect(self.batch_encode)
+
+        # Create batch extract subtitles action
+        extract_susbs_action = QAction("Extract subtitles", self)
+        extract_susbs_action.setStatusTip("Extract all subtitles inside a folder")
+        extract_susbs_action.triggered.connect(self.batch_extract_subs)
+
+        # Create encoding menu bar and add encoding action
+        encoding_menu = menu_bar.addMenu("&Batch")
+        # fileMenu.addAction(newAction)
+        encoding_menu.addAction(encoding_action)
+        encoding_menu.addAction(extract_susbs_action)
+
+        encoding_menu = menu_bar.addMenu("&Extra")
+
+        brun_subs_action = encoding_menu.addMenu("Burn subtitles")
+        brun_subs_action.setStatusTip("Burn subtitles")
+
+        brun_internal_subs_action = QAction("Internal subtitles", self)
+        brun_internal_subs_action.setStatusTip("Internal subtitles")
+        brun_internal_subs_action.triggered.connect(self.burn_internal_subs)
+
+        burn_external_subs_action = QAction("External subtitles", self)
+        burn_external_subs_action.setStatusTip("External subtitles")
+        burn_external_subs_action.triggered.connect(self.burn_external_subs)
+
+        brun_subs_action.addAction(brun_internal_subs_action)
+        brun_subs_action.addAction(burn_external_subs_action)
+
+        # Create gif action
+        to_gif_action = QAction("Convert to gif", self)
+        to_gif_action.setStatusTip("Convert to gif")
+        to_gif_action.triggered.connect(self.to_gif)
+
+        # Create extract subs action
+        extract_subs_action = QAction("Extract subtitle", self)
+        extract_subs_action.setStatusTip("Extract subtitle")
+        extract_subs_action.triggered.connect(self.extract_subtitle)
+
+        loop_video_action = QAction("Loop video", self)
+        loop_video_action.setStatusTip("Loop video")
+        loop_video_action.triggered.connect(self.loop_video)
+
+        # Create convert menu bar and add gif and extract_subs action
+        encoding_menu.addAction(to_gif_action)
+        encoding_menu.addAction(extract_subs_action)
+        encoding_menu.addAction(loop_video_action)
+
+        # Create trim_preset action
+        trim_internal_preset_action = QAction("Trim internal preset", self)
+        trim_internal_preset_action.setStatusTip("Trim internal preset")
+        trim_internal_preset_action.triggered.connect(self.trim_internal_preset)
+
+        trim_external_preset_action = QAction("Trim external preset", self)
+        trim_external_preset_action.setStatusTip("Trim external preset")
+        trim_external_preset_action.triggered.connect(self.trim_external_preset)
+
+        # Create presets menu bar and add trim_preset action
+        presets_menu = menu_bar.addMenu("&Presets")
+        presets_menu.addAction(trim_internal_preset_action)
+        presets_menu.addAction(trim_external_preset_action)
 
         self.play_button = QPushButton()
         self.play_button.setEnabled(False)
@@ -128,77 +250,7 @@ class VideoWindow(QMainWindow):
         self.error_label = QLabel()
         self.error_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
 
-        # Create open action
-        open_video_action = QAction(QIcon("open.png"), "&Open video", self)
-        open_video_action.setShortcut("Ctrl+O")
-        open_video_action.setStatusTip("Open video")
-        open_video_action.triggered.connect(self.open_video)
-
-        open_subtitle_action = QAction(QIcon("open.png"), "&Open subtitle", self)
-        open_subtitle_action.setStatusTip("Open subtitle")
-        open_subtitle_action.triggered.connect(self.open_subtitle)
-
-        # Create exit action
-        exit_action = QAction(QIcon("exit.png"), "&Exit", self)
-        exit_action.setShortcut("Ctrl+Q")
-        exit_action.setStatusTip("Exit application")
-        exit_action.triggered.connect(self.exit_call)
-
-        # Create FILE menu bar and add open and exit action
-        file_menu_bar = self.menuBar()
-        file_menu = file_menu_bar.addMenu("&File")
-        # fileMenu.addAction(newAction)
-        file_menu.addAction(open_video_action)
-        file_menu.addAction(open_subtitle_action)
-        file_menu.addAction(exit_action)
-
-        # Create batch encoding action
-        encoding_action = QAction("Encode mp4", self)
-        encoding_action.setStatusTip("Encode all videos inside a folder")
-        encoding_action.triggered.connect(self.batch_encode)
-
-        # Create batch extract subtitles action
-        extract_susbs_action = QAction("Extract subtitles", self)
-        extract_susbs_action.setStatusTip("Extract all subtitles inside a folder")
-        extract_susbs_action.triggered.connect(self.batch_extract_subs)
-
-        # Create encoding menu bar and add encoding action
-        encoding_menu_bar = self.menuBar()
-        encoding_menu = encoding_menu_bar.addMenu("&Batch")
-        # fileMenu.addAction(newAction)
-        encoding_menu.addAction(encoding_action)
-        encoding_menu.addAction(extract_susbs_action)
-
-        # Create gif action
-        to_gif_action = QAction("Convert to gif", self)
-        to_gif_action.setStatusTip("Convert to gif")
-        to_gif_action.triggered.connect(self.to_gif)
-
-        # Create extract subs action
-        extract_subs_action = QAction("Extract subtitle", self)
-        extract_subs_action.setStatusTip("Extract subtitle")
-        extract_subs_action.triggered.connect(self.extract_subtitle)
-
-        # Create convert menu bar and add gif and extract_subs action
-        encoding_menu_bar = self.menuBar()
-        encoding_menu = encoding_menu_bar.addMenu("&Extra")
-        encoding_menu.addAction(to_gif_action)
-        encoding_menu.addAction(extract_subs_action)
-
-        # Create trim_preset action
-        trim_internal_preset_action = QAction("Trim internal preset", self)
-        trim_internal_preset_action.setStatusTip("Trim internal preset")
-        trim_internal_preset_action.triggered.connect(self.trim_internal_preset)
-
-        trim_external_preset_action = QAction("Trim external preset", self)
-        trim_external_preset_action.setStatusTip("Trim external preset")
-        trim_external_preset_action.triggered.connect(self.trim_external_preset)
-
-        # Create presets menu bar and add trim_preset action
-        presets_menu_bar = self.menuBar()
-        presets_menu = presets_menu_bar.addMenu("&Presets")
-        presets_menu.addAction(trim_internal_preset_action)
-        presets_menu.addAction(trim_external_preset_action)
+        menu_bar = self.menuBar()
 
         # creating trim start widget
         self.trim_start_date_time_edit = QTimeEdit(self)
@@ -269,22 +321,23 @@ class VideoWindow(QMainWindow):
         # Set widget to contain window contents
         wid.setLayout(layout)
 
-        self.media_player.setVideoOutput(video_widget)
-        self.media_player.stateChanged.connect(self.media_state_changed)
-        self.media_player.positionChanged.connect(self.position_changed)
-        self.media_player.durationChanged.connect(self.duration_changed)
-        self.media_player.error.connect(self.handle_error)
+        self.video_player.setVideoOutput(video_widget)
+        # self.media_player.stateChanged.connect(self.media_state_changed)
+        self.video_player.positionChanged.connect(self.position_changed)
+        self.video_player.durationChanged.connect(self.duration_changed)
+        # self.media_player.error.connect(self.handle_error)
 
     def set_media(self):
         if self.media_info.file_location != "":
-            self.media_player.setMedia(
-                QMediaContent(QUrl.fromLocalFile(self.media_info.file_location))
-            )
+            self.video_player.setSource(self.media_info.file_location)
             self.play_button.setEnabled(True)
             self.label_file_location.setText(self.media_info.file_location)
-            self.play()
+            # self.video_player.setActiveSubtitleTrack(0)
+            """for track in self.video_player.subtitleTracks():
+                print(f"{track=}")"""
+            """self.play()
             time.sleep(0.01)
-            self.play()
+            self.play()"""
 
             if os.path.isfile(f"{self.media_info.file_location[:-4]}.srt"):
                 self.label_subtitle_location.setText(
@@ -296,7 +349,10 @@ class VideoWindow(QMainWindow):
 
     def browse_video(self):
         return QFileDialog.getOpenFileName(
-            self, "Open Video", self.media_info.file_location, VIDEO_FILTER
+            self,
+            "Open Video",
+            self.media_info.file_location,
+            VIDEO_FILTER,
         )[0]
 
     def select_folder(self):
@@ -333,19 +389,18 @@ class VideoWindow(QMainWindow):
             self.label_subtitle_location.setText(self.media_info.subtitle_location)
 
     def exit_call(self, app):
-        sys.exit(app.exec_())
+        sys.exit(app.exec())
 
     def play(self):
-        if self.media_player.state() == QMediaPlayer.PlayingState:
-            self.media_player.pause()
-        else:
-            self.media_player.play()
-
-    def media_state_changed(self, state):
-        if self.media_player.state() == QMediaPlayer.PlayingState:
-            self.play_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPause))
-        else:
+        global PLAY_PAUSE_STATE
+        if PLAY_PAUSE_STATE % 2 == 0:
+            self.video_player.play()
             self.play_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
+        else:
+            self.video_player.pause()
+            self.play_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPause))
+
+        PLAY_PAUSE_STATE += 1
 
     def set_current_time_slider(self, position):
         self.label_current_time.setText(f"{time_select_format(position)}")
@@ -363,7 +418,7 @@ class VideoWindow(QMainWindow):
         self.trim_end_date_time_edit.setTime(time_edit_format(_display_str))
 
     def set_position(self, position):
-        self.media_player.setPosition(position)
+        self.video_player.setPosition(position)
 
     def audio_channel_value_change(self, value):
         self.media_info.audio_channel = value
@@ -381,83 +436,219 @@ class VideoWindow(QMainWindow):
 
     def handle_error(self):
         self.play_button.setEnabled(False)
-        self.error_label.setText("Error: " + self.media_player.errorString())
+        self.error_label.setText("Error: " + self.video_player.errorString())
 
     def to_gif(self):
         _output = self.save_video(GIF_FILTER)
-
-        _to_gif_thread = threading.Thread(
-            target=encoding.to_gif, args=(self.media_info.file_location, _output)
-        )
-        _to_gif_thread.start()
+        if _output:
+            _to_gif_thread = threading.Thread(
+                target=encoding.to_gif, args=(self.media_info.file_location, _output)
+            )
+            _to_gif_thread.start()
 
     def extract_subtitle(self):
         _output = self.save_video(SUB_FILTER)
+        if _output:
+            _extract_subs_thread = threading.Thread(
+                target=encoding.extract_subtitle,
+                args=(
+                    self.media_info.file_location,
+                    _output,
+                    self.media_info.subtitle_channel,
+                ),
+            )
+            _extract_subs_thread.start()
 
-        _extract_subs_thread = threading.Thread(
-            target=encoding.extract_subtitle,
-            args=(
-                self.media_info.file_location,
-                _output,
-                self.media_info.subtitle_channel,
-            ),
+    def get_number_of_loops(self):
+        _num_of_loops, result = QInputDialog.getInt(
+            self, "Number of loops", "How many loop:"
         )
-        _extract_subs_thread.start()
+        if result:
+            self.number_of_loops = str(_num_of_loops - 1)
+            return True
+        return False
+
+    def get_duration_wanted(self):
+        _duration, result = QInputDialog.getInt(
+            self, "Duration after start time", "How many seconds:"
+        )
+        if result:
+            self.trim_duration_in_seconds = str(_duration)
+            return True
+        return False
+
+    def loop_video(self):
+        _output = self.save_video(VIDEO_FILTER)
+        _gif_flag = False
+        if _output:
+            _get_time = self.get_number_of_loops()
+            if _get_time:
+                if "gif" in self.media_info.file_location:
+                    _gif_flag = True
+                    _mp4_temp_path = "converting_to_mp4.mp4"
+                    encoding.gif_to_mp4(self.media_info.file_location, _mp4_temp_path)
+                _loop_video_thread = threading.Thread(
+                    target=encoding.loop_video,
+                    args=(
+                        _mp4_temp_path,
+                        _output,
+                        self.number_of_loops,
+                        _gif_flag,
+                    ),
+                )
+                _loop_video_thread.start()
 
     def batch_encode(self):
         _media_folder = f"{self.select_folder()}"
-        _batch_encode_thread = threading.Thread(
-            target=encoding.batch_encode, args=(_media_folder,)
-        )
-        _batch_encode_thread.start()
+        if _media_folder:
+            _batch_encode_thread = threading.Thread(
+                target=encoding.batch_encode, args=(_media_folder,)
+            )
+            _batch_encode_thread.start()
 
     def batch_extract_subs(self):
         _media_folder = self.select_folder()
-        _batch_extract_subs_thread = threading.Thread(
-            target=encoding.batch_extract_susbs,
-            args=(_media_folder, self.media_info.subtitle_channel),
-        )
-        _batch_extract_subs_thread.start()
+        if _media_folder:
+            _batch_extract_subs_thread = threading.Thread(
+                target=encoding.batch_extract_susbs,
+                args=(_media_folder, self.media_info.subtitle_channel),
+            )
+            _batch_extract_subs_thread.start()
 
     def trim_internal_preset(self):
         _output = self.save_video(VIDEO_FILTER)
-        _subs_status = "internal"
-        _trim_presets_thread = threading.Thread(
-            target=encoding.trim_preset,
-            args=(
-                self.media_info.file_location,
-                self.media_info.subtitle_location,
-                _output,
-                self.media_info.trim_start,
-                self.media_info.trim_end,
-                _subs_status,
-                self.media_info.audio_channel,
-                self.media_info.subtitle_channel,
-            ),
-        )
-        _trim_presets_thread.start()
+        if _output:
+            _subs_status = "internal"
+            _trim_presets_thread = threading.Thread(
+                target=encoding.trim_preset,
+                args=(
+                    self.media_info.file_location,
+                    self.media_info.subtitle_location,
+                    _output,
+                    self.media_info.trim_start,
+                    self.media_info.trim_end,
+                    _subs_status,
+                    self.media_info.audio_channel,
+                    self.media_info.subtitle_channel,
+                ),
+            )
+            _trim_presets_thread.start()
 
     def trim_external_preset(self):
-        """_output = self.save_video(VIDEO_FILTER)
-        self.media_info.subtitle_location = self.select_subtitle()
-        _subs_status = "external"
-        _trim_presets_thread = threading.Thread(
-            target=encoding.trim_preset,
-            args=(
-                self.media_info.file_location,
-                self.media_info.subtitle_location,
-                _output,
-                self.media_info.trim_start,
-                self.media_info.trim_end,
-                _subs_status,
-                self.media_info.audio_channel,
-                self.media_info.subtitle_channel,
-            ),
-        )
-        _trim_presets_thread.start()"""
+        _output = self.save_video(VIDEO_FILTER)
+        if _output:
+            self.media_info.subtitle_location = self.select_subtitle()
+            _subs_status = "external"
+            _trim_presets_thread = threading.Thread(
+                target=encoding.trim_preset,
+                args=(
+                    self.media_info.file_location,
+                    self.media_info.subtitle_location,
+                    _output,
+                    self.media_info.trim_start,
+                    self.media_info.trim_end,
+                    _subs_status,
+                    self.media_info.audio_channel,
+                    self.media_info.subtitle_channel,
+                ),
+            )
+            _trim_presets_thread.start()
 
-        brows = self.browse_video()
-        print(f"{brows=}")
+    def trim_basic(self):
+        _output = self.save_video(VIDEO_FILTER)
+        if _output:
+            _basic_trim_thread = threading.Thread(
+                target=encoding.trim_basic,
+                args=(
+                    self.media_info.trim_start,
+                    self.media_info.trim_end,
+                    self.media_info.file_location,
+                    _output,
+                    self.media_info.video_channel,
+                    self.media_info.audio_channel,
+                ),
+            )
+            _basic_trim_thread.start()
 
-        save = self.save_video()
-        print(f"{save=}")
+    def trim_duration(self):
+        _output = self.save_video(VIDEO_FILTER)
+        if _output:
+            _result = self.get_duration_wanted()
+            if _result:
+                _trim_duration_thread = threading.Thread(
+                    target=encoding.trim_duration,
+                    args=(
+                        self.media_info.trim_start,
+                        self.trim_duration_in_seconds,
+                        self.media_info.file_location,
+                        _output,
+                        self.media_info.video_channel,
+                        self.media_info.audio_channel,
+                    ),
+                )
+                _trim_duration_thread.start()
+
+    def trim_with_internal_subs(self):
+        _output = self.save_video(VIDEO_FILTER)
+        if _output:
+            trim_with_internal_subs_thread = threading.Thread(
+                target=encoding.trim_with_hard_subs,
+                args=(
+                    self.media_info.trim_start,
+                    self.media_info.trim_end,
+                    self.media_info.file_location,
+                    _output,
+                    self.media_info.video_channel,
+                    self.media_info.audio_channel,
+                    self.media_info.subtitle_channel,
+                ),
+            )
+            trim_with_internal_subs_thread.start()
+
+    def trim_with_external_subs(self):
+        _output = self.save_video(VIDEO_FILTER)
+        if _output:
+            if not self.media_info.subtitle_location:
+                self.media_info.subtitle_location = self.select_subtitle()
+            trim_with_internal_subs_thread = threading.Thread(
+                target=encoding.trim_with_hard_subs,
+                args=(
+                    self.media_info.trim_start,
+                    self.media_info.trim_end,
+                    self.media_info.file_location,
+                    _output,
+                    self.media_info.video_channel,
+                    self.media_info.audio_channel,
+                    self.media_info.subtitle_channel,
+                    self.media_info.subtitle_location,
+                ),
+            )
+            trim_with_internal_subs_thread.start()
+
+    def burn_internal_subs(self):
+        _output = self.save_video(VIDEO_FILTER)
+        if _output:
+            burn_internal_subs_thread = threading.Thread(
+                target=encoding.burn_subtitles,
+                args=(
+                    self.media_info.file_location,
+                    _output,
+                    self.media_info.subtitle_channel,
+                ),
+            )
+            burn_internal_subs_thread.start()
+
+    def burn_external_subs(self):
+        _output = self.save_video(VIDEO_FILTER)
+        if _output:
+            if not self.media_info.subtitle_location:
+                self.media_info.subtitle_location = self.select_subtitle()
+            burn_external_subs_thread = threading.Thread(
+                target=encoding.burn_subtitles,
+                args=(
+                    self.media_info.file_location,
+                    _output,
+                ),
+                kwargs={"_subtitle_path": self.media_info.subtitle_location},
+            )
+            burn_external_subs_thread.start()

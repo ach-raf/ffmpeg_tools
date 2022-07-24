@@ -54,6 +54,34 @@ def clean_text(_text):
     return cleaned_text
 
 
+def get_video_duration(_input):
+    """
+    ffprobe command to get the duration of a video
+    :param _input: video input
+    :return: video duration as a float
+    """
+    _task = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        _input,
+    ]
+    result = subprocess.run(_task, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    return float(result.stdout)
+
+
+def calculate_duration(_end_time, _start_time):
+    _format = "%H:%M:%S"
+    _duration = datetime.strptime(_end_time, _format) - datetime.strptime(
+        _start_time, _format
+    )
+    return f"{int(_duration.total_seconds())}"
+
+
 def encode_web_mp4(_input, _output):
     if _output:
         _output_base_path, _output_file_name = os.path.split(_output)
@@ -124,12 +152,78 @@ def extract_subtitle(_input, _output, subtitle_channel=0):
             return ""
 
 
+def burn_subtitles(_input, _output, _subtitle_channel=0, _subtitle_path=""):
+    _temp_subtitle = "temp_subtitle.ass"
+    if _subtitle_path:
+        copyfile(_subtitle_path, _temp_subtitle)
+        # external subs
+    else:
+        # internal subs
+        _extract_subtitle = extract_subtitle(_input, _temp_subtitle, _subtitle_channel)
+
+    _task = [
+        FFMPEG_PATH,
+        "-i",
+        _input,
+        #'-vf', f"subtitles={_temp_subtitle}:force_style='Fontsize=6'",
+        "-vf",
+        f"subtitles={_temp_subtitle}:force_style='Fontsize=6'",
+        "-preset",
+        "ultrafast",
+        "-c:a",
+        "copy",
+        _output,
+    ]
+
+    print("Starting burn_subtitles")
+    subprocess.run(_task)
+    os.remove(_temp_subtitle)
+    print("Subtitles burned!")
+
+
 def to_gif(_input, _output):
     if _output:
         _task = [FFMPEG_PATH, "-i", _input, "-vf", "fps=30", "-loop", "0", _output]
         print("Starting gif conversion")
         subprocess.run(_task)
         print("Gif conversion done!")
+
+
+def gif_to_mp4(_input, _output):
+    if _output:
+        _task = [
+            FFMPEG_PATH,
+            "-i",
+            _input,
+            "-movflags",
+            "faststart",
+            "-pix_fmt",
+            "yuv420p",
+            "-vf",
+            "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+            _output,
+        ]
+        print("Starting gif_to_mp4")
+        subprocess.run(_task)
+        print("gif_to_mp4 done!")
+
+
+def loop_video(_input, _output, _number_of_loops, _gif_flag=False):
+    _task = [
+        FFMPEG_PATH,
+        "-stream_loop",
+        _number_of_loops,
+        "-i",
+        _input,
+        "-c",
+        "copy",
+        _output,
+    ]
+    print("Starting loop_video")
+    subprocess.run(_task)
+    print("loop_video done!")
+    if _gif_flag:
+        os.remove(_input)
 
 
 def batch_encode(_media_folder):
@@ -160,16 +254,45 @@ def batch_extract_susbs(_media_folder, subtitle_channel=0):
                 _output = os.path.join(
                     _media_folder, f"{filename[:len(filename) - 4]}.ass"
                 )
+                print("Processing batch extract subtitles...")
                 extract_subtitle(_input, _output, subtitle_channel)
-        print("Subtitle extraction done!")
+        print("Batch extract subtitles done!")
 
 
-def calculate_duration(_end_time, _start_time):
-    _format = "%H:%M:%S"
-    _duration = datetime.strptime(_end_time, _format) - datetime.strptime(
-        _start_time, _format
-    )
-    return f"{int(_duration.total_seconds())}"
+def trim_basic(_start, _end, _video_input, _output, video_channel=0, audio_channel=0):
+    """
+    :param _start: time to start the cutting in this format HH:mm:ss
+    :param _end: time to end the cutting in this format HH:mm:ss
+    :param _video_input: path of the file to _trim
+    :param _output: path and name of the new clip c:\clips\clip.mkv
+    :param video_channel: the default video stream is 0
+    :param audio_channel: the default audio stream is 0
+    :return: runs the ffmpeg command to _trim the video and create the new clip
+    """
+    # simple ffmpeg trim_basic
+    trim_task = [
+        FFMPEG_PATH,
+        "-ss",
+        _start,
+        "-to",
+        _end,
+        "-copyts",
+        "-i",
+        _video_input,
+        "-map",
+        f"0:v:{video_channel}?",
+        "-map",
+        f"0:a:{audio_channel}?",
+        "-c:a",
+        "copy",
+        "-ss",
+        _start,
+        _output,
+    ]
+
+    print("Processing trim basic...")
+    subprocess.run(trim_task)
+    print("Trim basic done!")
 
 
 def trim_with_hard_subs(
@@ -177,10 +300,10 @@ def trim_with_hard_subs(
     _end,
     _video_input,
     _output,
-    subs_input="",
     video_channel=0,
     audio_channel=0,
     subtitle_channel=0,
+    subs_location="",
 ):
     """
     :param _start: time to start the cutting in this format HH:mm:ss.
@@ -196,14 +319,14 @@ def trim_with_hard_subs(
     _base_dir = os.path.split(_video_input)[0]
     _base_name = os.path.split(_video_input)[1]
     _temp_subtitle = "temp_subtitle.srt"
-    if not subs_input:
+    if not subs_location:
         # internal subs
         _extract_subtitle = extract_subtitle(
             _video_input, _temp_subtitle, subtitle_channel
         )
     else:
         # external subs
-        copyfile(subs_input, _temp_subtitle)
+        copyfile(subs_location, _temp_subtitle)
 
     trim_with_subs_task = [
         FFMPEG_PATH,
@@ -218,9 +341,9 @@ def trim_with_hard_subs(
         "-vf",
         f"subtitles={_temp_subtitle}",
         "-map",
-        f"0:v:{video_channel}",
+        f"0:v:{video_channel}?",
         "-map",
-        f"0:a:{audio_channel}",
+        f"0:a:{audio_channel}?",
         "-c:s",
         "copy",
         "-c:a",
@@ -230,9 +353,10 @@ def trim_with_hard_subs(
         _output,
     ]
 
-    print("Processing trim_with_hard_subs")
+    print("Processing trim with hard subs")
     subprocess.run(trim_with_subs_task)
     os.remove(_temp_subtitle)
+    print("Trim with hard subs done!")
 
 
 def trim_duration(
@@ -254,9 +378,9 @@ def trim_duration(
         "-t",
         _duration,
         "-map",
-        f"0:v:{video_channel}",
+        f"0:v:{video_channel}?",
         "-map",
-        f"0:a:{audio_channel}",
+        f"0:a:{audio_channel}?",
         # '-map', f'0:s:{subtitle_channel}',
         "-c:v",
         "copy",
@@ -268,26 +392,7 @@ def trim_duration(
     ]
     print("Starting trim_duration")
     subprocess.run(_trim_task)
-
-
-def get_video_duration(_input):
-    """
-    ffprobe command to get the duration of a video
-    :param _input: video input
-    :return: video duration as a float
-    """
-    _task = [
-        "ffprobe",
-        "-v",
-        "error",
-        "-show_entries",
-        "format=duration",
-        "-of",
-        "default=noprint_wrappers=1:nokey=1",
-        _input,
-    ]
-    result = subprocess.run(_task, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    return float(result.stdout)
+    print("trim_duration done!")
 
 
 def fade(_input, _output, _video_duration):
@@ -345,7 +450,7 @@ def trim_preset(
             _trim_end,
             _video_location,
             temp_trim_output,
-            subs_input=_subs_location,
+            subs_location=_subs_location,
             audio_channel=_audio_channel,
         )
     else:
