@@ -182,10 +182,15 @@ class VideoWindow(QMainWindow):
         loop_video_action.setStatusTip("Loop video")
         loop_video_action.triggered.connect(self.loop_video)
 
+        video_to_frames_action = QAction("Export Frames", self)
+        video_to_frames_action.setStatusTip("Export Frames")
+        video_to_frames_action.triggered.connect(self.export_frames)
+
         # Create convert menu bar and add gif and extract_subs action
         encoding_menu.addAction(to_gif_action)
         encoding_menu.addAction(extract_subs_action)
         encoding_menu.addAction(loop_video_action)
+        encoding_menu.addAction(video_to_frames_action)
 
         # Create trim_preset action
         trim_internal_preset_action = QAction("Trim internal preset", self)
@@ -510,6 +515,18 @@ class VideoWindow(QMainWindow):
                     ),
                 )
                 _loop_video_thread.start()
+
+    def export_frames(self):
+        _media_folder = f"{self.select_folder()}"
+        if _media_folder:
+            _export_frames_thread = threading.Thread(
+                target=encoding.video_to_frames,
+                args=(
+                    self.media_info.file_location,
+                    _media_folder,
+                ),
+            )
+            _export_frames_thread.start()
 
     def encode_web_mp4(self):
         _output = self.save_video(VIDEO_FILTER)

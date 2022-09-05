@@ -11,6 +11,8 @@ from datetime import datetime
 # path to ffmpeg bin
 FFMPEG_PATH = os.path.join("C:\\", "ffmpeg", "bin", "ffmpeg")
 
+FFPROBE_PATH = os.path.join("C:\\", "ffmpeg", "bin", "ffprobe")
+
 # fonts directory
 FONT_DIR = os.path.join("C:\\", "Windows", "Fonts")
 
@@ -32,6 +34,8 @@ COMPRESSION_RATIO = "veryslow"
 
 # current directory
 CURRENT_DIR_PATH = os.path.dirname(os.path.realpath(__file__))
+
+ROOT_DIRECTORY = os.path.normpath(CURRENT_DIR_PATH + os.sep + os.pardir)
 # ==============================================================================
 
 
@@ -61,7 +65,7 @@ def get_video_duration(_input):
     :return: video duration as a float
     """
     _task = [
-        "ffprobe",
+        FFPROBE_PATH,
         "-v",
         "error",
         "-show_entries",
@@ -70,8 +74,7 @@ def get_video_duration(_input):
         "default=noprint_wrappers=1:nokey=1",
         _input,
     ]
-    result = subprocess.run(
-        _task, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    result = subprocess.run(_task, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     return float(result.stdout)
 
 
@@ -101,8 +104,8 @@ def encode_web_mp4(_input, _output):
             "libx264",
             "-c:a",
             "aac",
-            "-c:s",
-            "mov_text",
+            # "-c:s",
+            # "mov_text",
             "-pix_fmt",
             "yuv420p",
             "-profile:v",
@@ -154,14 +157,17 @@ def extract_subtitle(_input, _output, subtitle_channel=0):
 
 
 def burn_subtitles(_input, _output, _subtitle_channel=0, _subtitle_path=""):
-    _temp_subtitle = "temp_subtitle.ass"
+    _base_dir = os.path.split(_input)[0]
+    _base_name = os.path.split(_input)[1]
+    _subtitle_name = _base_name[: len(_base_name) - 4]
+    _temp_subtitle = os.path.join(ROOT_DIRECTORY, f"{_subtitle_name}.ass")
+
     if _subtitle_path:
         copyfile(_subtitle_path, _temp_subtitle)
         # external subs
     else:
         # internal subs
-        _extract_subtitle = extract_subtitle(
-            _input, _temp_subtitle, _subtitle_channel)
+        _extract_subtitle = extract_subtitle(_input, _temp_subtitle, _subtitle_channel)
 
     _task = [
         FFMPEG_PATH,
@@ -185,8 +191,7 @@ def burn_subtitles(_input, _output, _subtitle_channel=0, _subtitle_path=""):
 
 def to_gif(_input, _output):
     if _output:
-        _task = [FFMPEG_PATH, "-i", _input, "-vf",
-                 "fps=30", "-loop", "0", _output]
+        _task = [FFMPEG_PATH, "-i", _input, "-vf", "fps=30", "-loop", "0", _output]
         print("Starting gif conversion")
         subprocess.run(_task)
         print("Gif conversion done!")
@@ -227,6 +232,20 @@ def loop_video(_input, _output, _number_of_loops, _gif_flag=False):
     print("loop_video done!")
     if _gif_flag:
         os.remove(_input)
+
+
+def video_to_frames(_input, _output):
+    _task = [
+        FFMPEG_PATH,
+        "-i",
+        _input,
+        "-vf",
+        "fps=1",
+        f"{ os.path.join(_output, 'out%d.png')}",
+    ]
+    print("Starting video_to_frames")
+    subprocess.run(_task)
+    print("video_to_frames done!")
 
 
 def batch_encode(_media_folder):
@@ -321,7 +340,15 @@ def trim_with_hard_subs(
     """
     _base_dir = os.path.split(_video_input)[0]
     _base_name = os.path.split(_video_input)[1]
-    _temp_subtitle = "temp_subtitle.srt"
+    _subtitle_name = _base_name[: len(_base_name) - 4]
+
+    _temp_subtitle = os.path.join(
+        ROOT_DIRECTORY, f"{_subtitle_name[:len(_subtitle_name)-4]}.ass"
+    )
+    subs_location = os.path.normpath(subs_location)
+    _temp_subtitle = os.path.normpath(_temp_subtitle)
+    print(f"{_temp_subtitle=}")
+    print(f"{subs_location=}")
     if not subs_location:
         # internal subs
         _extract_subtitle = extract_subtitle(
@@ -341,8 +368,8 @@ def trim_with_hard_subs(
         "-i",
         _video_input,
         #'-vf', f"subtitles={_temp_subtitle}:force_style='Fontsize=6'",
-        "-vf",
-        f"subtitles={_temp_subtitle}",
+        "-filter_complex",
+        f"subtitles='{_temp_subtitle}'",
         "-map",
         f"0:v:{video_channel}?",
         "-map",
@@ -445,8 +472,7 @@ def trim_preset(
     # output_file_name = clean_text(output_file_name)
 
     # path for the temporary trim_basic
-    temp_trim_output = os.path.join(
-        output_base_path, f"basic_{input_file_name}")
+    temp_trim_output = os.path.join(output_base_path, f"basic_{input_file_name}")
 
     if "external" in _subs_status:
         trim_with_hard_subs(
@@ -467,8 +493,7 @@ def trim_preset(
             subtitle_channel=_subs_channel,
         )
 
-    temp_mp4_output = os.path.join(
-        output_base_path, f"encode_{output_file_name}")
+    temp_mp4_output = os.path.join(output_base_path, f"encode_{output_file_name}")
     encode_web_mp4(temp_trim_output, temp_mp4_output)
     # clean temp file
     os.remove(temp_trim_output)
@@ -478,8 +503,7 @@ def trim_preset(
     temp_duration_output = os.path.join(
         output_base_path, f"duration_{output_file_name}"
     )
-    trim_duration("00:00:00", video_duration,
-                  temp_mp4_output, temp_duration_output)
+    trim_duration("00:00:00", video_duration, temp_mp4_output, temp_duration_output)
     # clean temp file
     os.remove(temp_mp4_output)
 
