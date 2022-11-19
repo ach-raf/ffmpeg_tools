@@ -2,7 +2,7 @@ import os
 import subprocess
 from shutil import copyfile
 from datetime import datetime
-
+from pathlib import Path
 
 # -------------------------------------------------------------------------------
 # CONFIGURABLE SETTINGS
@@ -135,6 +135,7 @@ def encode_web_mp4(_input, _output):
 
 def extract_subtitle(_input, _output, subtitle_channel=0):
     print(f"Extracting subtitle from {_input} at channel {subtitle_channel}")
+    _output = Path(_output)
     if _output:
         _extract_subtitle = [
             FFMPEG_PATH,
@@ -145,47 +146,41 @@ def extract_subtitle(_input, _output, subtitle_channel=0):
             # "-vsync",
             "-map",
             f"0:s:{subtitle_channel}",
-            f"{_output}",
+            f"{_output.absolute().as_posix()}",
         ]
 
         subprocess.run(_extract_subtitle)
-        if os.path.exists(_output):
+        if _output.is_file():
             print("Subtitle extracted!")
-            return _output
+            print(f"Subtitle saved at {_output.absolute().as_posix()}")
+            return _output.absolute().as_posix()
         else:
-            return ""
+            return None
 
 
-def burn_subtitles(_input, _output, _subtitle_channel=0, _subtitle_path=""):
-    _base_dir = os.path.split(_input)[0]
-    _base_name = os.path.split(_input)[1]
-    _subtitle_name = _base_name[: len(_base_name) - 4]
-    _temp_subtitle = os.path.join(ROOT_DIRECTORY, f"{_subtitle_name}.ass")
+def burn_subtitles(_input, _output, _subtitle_path):
+    _subtitle_path = Path(_subtitle_path)
 
-    if _subtitle_path:
-        copyfile(_subtitle_path, _temp_subtitle)
-        # external subs
-    else:
-        # internal subs
-        _extract_subtitle = extract_subtitle(_input, _temp_subtitle, _subtitle_channel)
-
+    # -filter_complex in ffmpeg needs special escape rules, for a path like c:\clips\clip.mkv it needs to be, c\:\\clips\\clip.mkv
+    _subtitles_filter_path = (
+        str(_subtitle_path.absolute()).replace("\\", "\\\\").replace(":", "\:")
+    )
+    print(f"{_subtitles_filter_path=}")
     _task = [
         FFMPEG_PATH,
         "-i",
         _input,
         #'-vf', f"subtitles={_temp_subtitle}:force_style='Fontsize=6'",
         "-vf",
-        f"subtitles={_temp_subtitle}",
+        f"subtitles={_subtitles_filter_path}",
         "-preset",
         "ultrafast",
         "-c:a",
         "copy",
         _output,
     ]
-
     print("Starting burn_subtitles")
     subprocess.run(_task)
-    os.remove(_temp_subtitle)
     print("Subtitles burned!")
 
 
@@ -325,7 +320,7 @@ def trim_with_hard_subs(
     video_channel=0,
     audio_channel=0,
     subtitle_channel=0,
-    subs_location="",
+    subs_location=None,
 ):
     """
     :param _start: time to start the cutting in this format HH:mm:ss.
@@ -340,24 +335,24 @@ def trim_with_hard_subs(
     """
     _base_dir = os.path.split(_video_input)[0]
     _base_name = os.path.split(_video_input)[1]
-    _subtitle_name = _base_name[: len(_base_name) - 4]
 
-    _temp_subtitle = os.path.join(
-        ROOT_DIRECTORY, f"{_subtitle_name[:len(_subtitle_name)-4]}.ass"
-    )
-    subs_location = os.path.normpath(subs_location)
-    _temp_subtitle = os.path.normpath(_temp_subtitle)
-    print(f"{_temp_subtitle=}")
-    print(f"{subs_location=}")
+    _temp_subtitle = f"{_output[:len(_output)-4]}.srt"
+    _temp_subtitle = Path(_temp_subtitle)
+
     if not subs_location:
         # internal subs
-        _extract_subtitle = extract_subtitle(
-            _video_input, _temp_subtitle, subtitle_channel
+        subs_location = extract_subtitle(
+            _video_input, _temp_subtitle.absolute().as_posix(), subtitle_channel
         )
     else:
         # external subs
-        copyfile(subs_location, _temp_subtitle)
+        copyfile(subs_location, _temp_subtitle.absolute().as_posix())
 
+    # -filter_complex in ffmpeg needs special escape rules, for a path like c:\clips\clip.mkv it needs to be, c\:\\clips\\clip.mkv
+    _subtitles_filter_path = (
+        str(_temp_subtitle.absolute()).replace("\\", "\\\\").replace(":", "\:")
+    )
+    print(f"{_subtitles_filter_path=}")
     trim_with_subs_task = [
         FFMPEG_PATH,
         "-ss",
@@ -369,7 +364,7 @@ def trim_with_hard_subs(
         _video_input,
         #'-vf', f"subtitles={_temp_subtitle}:force_style='Fontsize=6'",
         "-filter_complex",
-        f"subtitles='{_temp_subtitle}'",
+        f"subtitles='{_subtitles_filter_path}'",
         "-map",
         f"0:v:{video_channel}?",
         "-map",
@@ -473,13 +468,14 @@ def trim_preset(
 
     # path for the temporary trim_basic
     temp_trim_output = os.path.join(output_base_path, f"basic_{input_file_name}")
+    temp_trim_output = Path(temp_trim_output)
 
     if "external" in _subs_status:
         trim_with_hard_subs(
             _trim_start,
             _trim_end,
             _video_location,
-            temp_trim_output,
+            temp_trim_output.absolute().as_posix(),
             subs_location=_subs_location,
             audio_channel=_audio_channel,
         )
@@ -488,30 +484,41 @@ def trim_preset(
             _trim_start,
             _trim_end,
             _video_location,
-            temp_trim_output,
+            temp_trim_output.absolute().as_posix(),
             audio_channel=_audio_channel,
             subtitle_channel=_subs_channel,
         )
 
     temp_mp4_output = os.path.join(output_base_path, f"encode_{output_file_name}")
-    encode_web_mp4(temp_trim_output, temp_mp4_output)
+    temp_mp4_output = Path(temp_mp4_output)
+    encode_web_mp4(
+        temp_trim_output.absolute().as_posix(), temp_mp4_output.absolute().as_posix()
+    )
     # clean temp file
-    os.remove(temp_trim_output)
+    os.remove(temp_trim_output.absolute().as_posix())
 
     video_duration = calculate_duration(_trim_end, _trim_start)
 
     temp_duration_output = os.path.join(
         output_base_path, f"duration_{output_file_name}"
     )
-    trim_duration("00:00:00", video_duration, temp_mp4_output, temp_duration_output)
+    temp_duration_output = Path(temp_duration_output)
+    trim_duration(
+        "00:00:00",
+        video_duration,
+        temp_mp4_output,
+        temp_duration_output.absolute().as_posix(),
+    )
     # clean temp file
-    os.remove(temp_mp4_output)
+    os.remove(temp_mp4_output.absolute().as_posix())
 
-    _video_duration_seconds = int(get_video_duration(temp_duration_output))
+    _video_duration_seconds = int(
+        get_video_duration(temp_duration_output.absolute().as_posix())
+    )
     _output = clean_text(_output)
-    fade(temp_duration_output, _output, _video_duration_seconds)
+    fade(temp_duration_output.absolute().as_posix(), _output, _video_duration_seconds)
 
-    os.remove(temp_duration_output)
+    os.remove(temp_duration_output.absolute().as_posix())
     print("All Done!")
 
 

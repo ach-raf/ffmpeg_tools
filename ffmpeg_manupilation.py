@@ -1,5 +1,6 @@
 import sys
 import os
+from pathlib import Path
 from PySide6.QtWidgets import QApplication
 
 import lib.video_window as video_window
@@ -12,8 +13,7 @@ def main():
     # player.resize(640, 480)
     if len(sys.argv) > 1:
         # I used replace because os.path.normpath(sys.argv[1]) is not working for some reason
-        _clean_path = sys.argv[1].replace("\\", "/")
-        player.media_info.file_location = _clean_path
+        player.media_info.file_location = Path(sys.argv[1]).absolute().as_posix()
         player.show()
         player.set_media()
     else:
