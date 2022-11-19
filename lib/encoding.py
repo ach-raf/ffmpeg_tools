@@ -27,9 +27,11 @@ SUB_FILTER = "Subtitle(*.srt *.ass *.sub)"
 CRF_VALUE = "23"
 
 # h.264 profile
-PROFILE = "high"
+# baseline, main, high
+PROFILE = "baseline"
 
 # encoding speed:compression ratio
+# veryslow, slower, slow, medium, fast, faster, veryfast, superfast, ultrafast
 COMPRESSION_RATIO = "veryslow"
 
 # current directory
@@ -109,7 +111,7 @@ def encode_web_mp4(_input, _output):
             "-pix_fmt",
             "yuv420p",
             "-profile:v",
-            "baseline",
+            f"{PROFILE}",
             "-level",
             "3.0",
             "-crf",
@@ -174,7 +176,7 @@ def burn_subtitles(_input, _output, _subtitle_path):
         "-vf",
         f"subtitles={_subtitles_filter_path}",
         "-preset",
-        "ultrafast",
+        f"{COMPRESSION_RATIO}",
         "-c:a",
         "copy",
         _output,
