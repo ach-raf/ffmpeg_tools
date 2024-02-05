@@ -9,12 +9,12 @@ from pathlib import Path
 # -------------------------------------------------------------------------------
 
 # path to ffmpeg bin
-FFMPEG_PATH = os.path.join("C:\\", "ffmpeg", "bin", "ffmpeg")
+FFMPEG_PATH = Path("C:\\", "ffmpeg", "bin", "ffmpeg")
 
-FFPROBE_PATH = os.path.join("C:\\", "ffmpeg", "bin", "ffprobe")
+FFPROBE_PATH = Path("C:\\", "ffmpeg", "bin", "ffprobe")
 
 # fonts directory
-FONT_DIR = os.path.join("C:\\", "Windows", "Fonts")
+FONT_DIR = Path("C:\\", "Windows", "Fonts")
 
 SUPPORTED_MEDIA = ["mp4", "mkv", "avi", "mov"]
 
@@ -35,15 +35,16 @@ PROFILE = "baseline"
 COMPRESSION_RATIO = "veryslow"
 
 # current directory
-CURRENT_DIR_PATH = os.path.dirname(os.path.realpath(__file__))
+CURRENT_DIR_PATH = Path(__file__).resolve().parent
 
-ROOT_DIRECTORY = os.path.normpath(CURRENT_DIR_PATH + os.sep + os.pardir)
+ROOT_DIRECTORY = CURRENT_DIR_PATH.parent
 # ==============================================================================
 
 
 def check_directory_exists(path):
-    if not os.path.exists(path):
-        os.makedirs(path)
+    path = Path(path)
+    if not path.exists():
+        path.mkdir()
 
 
 def clean_text(_text):
@@ -60,24 +61,64 @@ def clean_text(_text):
     return cleaned_text
 
 
-def get_video_duration(_input):
+def get_video_duration(video_file: str) -> float:
     """
-    ffprobe command to get the duration of a video
-    :param _input: video input
-    :return: video duration as a float
+    Gets the duration of a video file using ffprobe.
+
+    Args:
+    video_file (str): Path to the video file.
+
+    Returns:
+    float: Duration of the video in seconds.
     """
-    _task = [
-        FFPROBE_PATH,
-        "-v",
-        "error",
-        "-show_entries",
-        "format=duration",
-        "-of",
-        "default=noprint_wrappers=1:nokey=1",
-        _input,
+    try:
+        # Construct the command to get the video duration using ffprobe
+        command = [
+            FFPROBE_PATH,
+            "-v",
+            "error",  # Hide any warnings
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            video_file,
+        ]
+
+        # Execute the command
+        result = subprocess.run(
+            command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+        )
+        # Parse the output to get the duration
+        duration = float(result.stdout.strip())
+        return duration
+    except subprocess.CalledProcessError as e:
+        print(f"An error occurred while getting video duration: {e}")
+        return 0.0
+    except ValueError as e:
+        print(f"Could not convert duration to float: {e}")
+        return 0.0
+
+
+def get_subtitle_format(input_file: str, subtitle_channel=0) -> str:
+    ffprobe_command = [
+        FFMPEG_PATH,
+        "-i",
+        input_file,
+        "-map",
+        f"0:s:{subtitle_channel}",
+        "-c",
+        "copy",
+        "-f",
+        "null",
+        "-",
     ]
-    result = subprocess.run(_task, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    return float(result.stdout)
+
+    result = subprocess.run(ffprobe_command, capture_output=True, text=True)
+
+    if "subtitle: ass" in result.stderr.lower():
+        return "ass"
+    else:
+        return "srt"
 
 
 def calculate_duration(_end_time, _start_time):
@@ -88,51 +129,77 @@ def calculate_duration(_end_time, _start_time):
     return f"{int(_duration.total_seconds())}"
 
 
-def encode_web_mp4(_input, _output):
-    if _output:
-        _output_base_path, _output_file_name = os.path.split(_output)
-        _output_file_name = f"{_output_file_name[:len(_output_file_name) - 4]}.mp4"
-        _output = os.path.join(_output_base_path, _output_file_name)
-        # ffmpeg command to create an mp4 file that can be shared on the web, mobile...
-        _encode_task = [
-            FFMPEG_PATH,
-            "-i",
-            _input,
-            "-map_metadata",
-            "0",
-            "-movflags",
-            "use_metadata_tags",
-            "-c:v",
-            "libx264",
-            "-c:a",
-            "aac",
-            # "-c:s",
-            # "mov_text",
-            "-pix_fmt",
-            "yuv420p",
-            "-profile:v",
-            f"{PROFILE}",
-            "-level",
-            "3.0",
-            "-crf",
-            CRF_VALUE,
-            "-preset",
-            COMPRESSION_RATIO,
-            "-vf",
-            "scale=1280:-2",
-            "-strict",
-            "experimental",
-            "-movflags",
-            "+faststart",
-            "-threads",
-            "0",
-            "-f",
-            "mp4",
-            _output,
-        ]
-        print("Processing encode_web_mp4")
-        subprocess.run(_encode_task)
+def lossless_mp4(_input, _output):
+    _lossless_mp4_task = [
+        FFMPEG_PATH,
+        "-i",
+        _input,
+        "-c:v",
+        "libx264",
+        # ☻"-qp",
+        # "0",
+        "-c:a",
+        "aac",
+        _output,
+    ]
+    print("Processing lossless_mp4")
+    subprocess.run(_lossless_mp4_task)
+    print("Process lossless_mp4 finished!")
+
+
+def encode_web_mp4(input_file, output_file):
+    # Ensure the output file has the correct .mp4 extension
+    output_base_path, output_file_name = os.path.split(output_file)
+    output_file_name = f"{os.path.splitext(output_file_name)[0]}.mp4"
+    output_file = os.path.join(output_base_path, output_file_name)
+
+    # ffmpeg command to create an mp4 file that can be shared on the web, mobile...
+    encode_task = [
+        FFMPEG_PATH,
+        "-i",
+        input_file,
+        "-map_metadata",
+        "0",
+        "-movflags",
+        "use_metadata_tags",
+        "-c:v",
+        "libx264",
+        "-c:a",
+        "aac",
+        "-ac",
+        "2",  # Ensure stereo audio
+        "-ar",
+        "48000",  # Set audio sample rate
+        "-b:a",
+        "192k",  # Set audio bitrate
+        "-pix_fmt",
+        "yuv420p",
+        "-profile:v",
+        PROFILE,
+        "-level",
+        "3.0",
+        "-crf",
+        CRF_VALUE,
+        "-preset",
+        COMPRESSION_RATIO,
+        "-vf",
+        "scale=1280:-2",
+        "-movflags",
+        "+faststart",
+        "-threads",
+        "0",
+        "-f",
+        "mp4",
+        output_file,
+    ]
+
+    print("Processing encode_web_mp4")
+    try:
+        subprocess.run(encode_task, check=True)
         print("Process encode_web_mp4 finished!")
+    except subprocess.CalledProcessError as e:
+        print(f"An error occurred: {e}")
+        raise
 
 
 def extract_subtitle(_input, _output, subtitle_channel=0):
@@ -264,17 +331,15 @@ def batch_encode(_media_folder):
         print("Encoding done!")
 
 
-def batch_extract_susbs(_media_folder, subtitle_channel=0):
-    if _media_folder:
-        directory = os.listdir(_media_folder)
-        for filename in directory:
-            if filename[-3:].lower() in SUPPORTED_MEDIA:
-                _input = os.path.join(_media_folder, filename)
-                _output = os.path.join(
-                    _media_folder, f"{filename[:len(filename) - 4]}.ass"
-                )
+def batch_extract_subtitles(media_folder: str, subtitle_channel: int = 0) -> None:
+    if media_folder:
+        media_path = Path(media_folder)
+        for file_path in media_path.iterdir():
+            if file_path.suffix[1:].lower() in SUPPORTED_MEDIA:
+                subtitle_extension = get_subtitle_format(file_path, subtitle_channel)
+                output_path = media_path / f"{file_path.stem}.{subtitle_extension}"
                 print("Processing batch extract subtitles...")
-                extract_subtitle(_input, _output, subtitle_channel)
+                extract_subtitle(file_path, output_path, subtitle_channel)
         print("Batch extract subtitles done!")
 
 
@@ -322,7 +387,7 @@ def trim_with_hard_subs(
     video_channel=0,
     audio_channel=0,
     subtitle_channel=0,
-    subs_location=None,
+    subtitles_path=None,
 ):
     """
     :param _start: time to start the cutting in this format HH:mm:ss.
@@ -341,14 +406,14 @@ def trim_with_hard_subs(
     _temp_subtitle = f"{_output[:len(_output)-4]}.srt"
     _temp_subtitle = Path(_temp_subtitle)
 
-    if not subs_location:
+    if not subtitles_path:
         # internal subs
-        subs_location = extract_subtitle(
+        subtitles_path = extract_subtitle(
             _video_input, _temp_subtitle.absolute().as_posix(), subtitle_channel
         )
     else:
         # external subs
-        copyfile(subs_location, _temp_subtitle.absolute().as_posix())
+        copyfile(subtitles_path, _temp_subtitle.absolute().as_posix())
 
     # -filter_complex in ffmpeg needs special escape rules, for a path like c:\clips\clip.mkv it needs to be, c\:\\clips\\clip.mkv
     _subtitles_filter_path = (
@@ -366,11 +431,21 @@ def trim_with_hard_subs(
         _video_input,
         #'-vf', f"subtitles={_temp_subtitle}:force_style='Fontsize=6'",
         "-filter_complex",
-        f"subtitles='{_subtitles_filter_path}'",
+        f"subtitles='{_subtitles_filter_path}:force_style='Fontsize=18'",
         "-map",
         f"0:v:{video_channel}?",
         "-map",
         f"0:a:{audio_channel}?",
+        # new addition, trying to change 5.1 audio to stereo
+        "-ac",
+        "2",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "320k",
+        "-ar",
+        "48000",
+        # till here
         "-c:s",
         "copy",
         "-c:a",
@@ -387,58 +462,112 @@ def trim_with_hard_subs(
 
 
 def trim_duration(
-    _start,
-    _duration,
-    _input,
-    _output,
-    video_channel=0,
-    audio_channel=0,
-    subtitle_channel=0,
+    start: str,
+    duration: str,
+    input_file: str,
+    output_file: str,
+    video_channel: int = 0,
+    audio_channel: int = 0,
+    subtitle_channel: int = 0,
 ):
+    """
+    Trims a video file to the specified duration from the start time, copies the streams,
+    and resets timestamps.
 
-    _trim_task = [
+    Args:
+    start (str): Start time for trimming.
+    duration (str): Duration to keep after the start time.
+    input_file (str): Path to the input video file.
+    output_file (str): Path to the output video file.
+    video_channel (int, optional): Video channel to map. Defaults to 0.
+    audio_channel (int, optional): Audio channel to map. Defaults to 0.
+    subtitle_channel (int, optional): Subtitle channel to map. Defaults to 0.
+    """
+    # Construct the ffmpeg command
+    trim_command = [
         FFMPEG_PATH,
-        "-i",
-        _input,
         "-ss",
-        _start,
+        start,
+        "-i",
+        input_file,
         "-t",
-        _duration,
+        duration,
         "-map",
         f"0:v:{video_channel}?",
         "-map",
         f"0:a:{audio_channel}?",
-        # '-map', f'0:s:{subtitle_channel}',
-        "-c:v",
+        "-map",
+        f"0:s:{subtitle_channel}?",
+        "-reset_timestamps",
+        "1",
+        "-c",
         "copy",
-        "-c:a",
-        "aac",
-        "-c:s",
-        "mov_text",
-        _output,
+        output_file,
     ]
+
+    # Execute the command
     print("Starting trim_duration")
-    subprocess.run(_trim_task)
+    subprocess.run(trim_command, check=True)
     print("trim_duration done!")
 
 
-def fade(_input, _output, _video_duration):
-    _fade_duration = 1
-    _fade_start = _video_duration - _fade_duration
+def fade(input_file: str, output_file: str, video_duration: int) -> None:
+    """
+    Applies a fade-out effect to the video and audio of the input file.
 
-    _task = [
+    Args:
+        input_file (str): Path to the input video file.
+        output_file (str): Path to the output video file.
+        video_duration (int): Duration of the video in seconds.
+    """
+    fade_duration = 1  # Duration of the fade effect in seconds
+    fade_start = video_duration - fade_duration  # Start time of the fade effect
+
+    task = [
         FFMPEG_PATH,
-        "-y",
+        "-y",  # Overwrite output file without asking
         "-i",
-        _input,
+        input_file,
         "-vf",
-        f"fade=t=out:st={_fade_start}:d={_fade_duration}",
+        f"fade=t=out:st={fade_start}:d={fade_duration}",  # Video fade
         "-af",
-        f"afade=t=out:st={_fade_start}:d={_fade_duration}",
-        _output,
+        f"afade=t=out:st={fade_start}:d={fade_duration}",  # Audio fade
+        output_file,
     ]
-    print("Starting fade")
-    subprocess.run(_task)
+
+    print("Starting fade effect")
+    try:
+        subprocess.run(task, check=True)
+        print("Fade effect applied successfully to both video and audio.")
+    except subprocess.CalledProcessError as e:
+        print(f"An error occurred during the fade effect: {e}")
+        raise
+
+
+def convert_3gp_to_mp4(input_file, output_file):
+    """
+    Convert a .3gp video to mp4 format.
+
+    :param input_file: Path to the input .3gp file.
+    :param output_file: Path to the output mp4 file.
+    """
+    # Use FFmpeg to perform the conversion
+    conversion_command = [
+        FFMPEG_PATH,
+        "-i",
+        input_file,
+        "-c:v",
+        "libx264",
+        "-c:a",
+        "aac",
+        output_file,
+    ]
+
+    try:
+        subprocess.run(conversion_command, check=True)
+        print(f"Conversion successful. {input_file} converted to {output_file}")
+    except subprocess.CalledProcessError as e:
+        print(f"Error during conversion: {e}")
 
 
 def trim_preset(
@@ -478,7 +607,7 @@ def trim_preset(
             _trim_end,
             _video_location,
             temp_trim_output.absolute().as_posix(),
-            subs_location=_subs_location,
+            subtitles_path=_subs_location,
             audio_channel=_audio_channel,
         )
     else:
@@ -521,6 +650,89 @@ def trim_preset(
     fade(temp_duration_output.absolute().as_posix(), _output, _video_duration_seconds)
 
     os.remove(temp_duration_output.absolute().as_posix())
+    print("All Done!")
+
+
+def trim_preset_new(
+    video_path,
+    subtitles_path,
+    output_path,
+    trim_start,
+    trim_end,
+    subtitles_status,
+    audio_channel=0,
+    subtitles_channel=0,
+):
+    """
+    Trims and encodes video with optional hard subtitles, handling temporary files cleanly.
+    """
+    # Convert string paths to Path objects
+    video_path = Path(video_path)
+    subtitles_path = Path(subtitles_path)
+    output_path = Path(output_path)
+    output_base_path = output_path.parent
+
+    output_base_path = output_path.parent
+
+    # Temporary files
+    temp_trim_output = output_base_path / f"basic_{video_path.name}"
+    temp_duration_output = output_base_path / f"duration_{video_path.name}"
+    temp_encoded_output = output_base_path / f"encoded_{output_path.name}"
+    print(f"{temp_trim_output=}")
+    print(f"{temp_duration_output=}")
+    print(f"{temp_encoded_output=}")
+
+    try:
+        # Trim with hard subtitles if required
+        if "external" in subtitles_status:
+            trim_with_hard_subs(
+                trim_start,
+                trim_end,
+                str(video_path),
+                str(temp_trim_output),
+                subtitles_path=str(subtitles_path),
+                audio_channel=audio_channel,
+            )
+        else:
+            trim_with_hard_subs(
+                trim_start,
+                trim_end,
+                str(video_path),
+                str(temp_trim_output),
+                audio_channel=audio_channel,
+                subtitles_channel=subtitles_channel,
+            )
+
+        # Calculate video duration
+        video_duration = calculate_duration(trim_end, trim_start)
+
+        # Trim duration
+        trim_duration(
+            "00:00:00",
+            video_duration,
+            str(temp_trim_output),
+            str(temp_duration_output),
+        )
+
+        # Encode to web mp4 format
+        encode_web_mp4(str(temp_duration_output), str(temp_encoded_output))
+
+        # Get video duration in seconds
+        video_duration_seconds = int(get_video_duration(str(temp_encoded_output)))
+
+        # Clean text for output
+        output_cleaned = clean_text(str(output_path))
+
+        # Apply fade effect
+        fade(str(temp_encoded_output), output_cleaned, video_duration_seconds)
+
+    finally:
+        print("Cleaning up temporary files...")
+        # Clean up temporary files
+        for temp_file in [temp_trim_output, temp_duration_output, temp_encoded_output]:
+            if temp_file.exists():
+                temp_file.unlink()
+
     print("All Done!")
 
 

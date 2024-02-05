@@ -1,7 +1,7 @@
 import sys
 import os
 import time
-
+from pathlib import Path
 from PySide6.QtWidgets import QFileDialog, QMainWindow
 
 from PySide6.QtCore import QDir, Qt, QUrl, QDateTime, QTime
@@ -21,7 +21,9 @@ from PySide6.QtWidgets import (
     QTimeEdit,
     QInputDialog,
 )
-from PySide6.QtGui import QIcon, QAction
+from PySide6.QtGui import QIcon, QAction, QColor, QPalette
+from qtmodern.windows import ModernWindow
+
 
 import datetime
 import lib.media_info as media_info
@@ -35,7 +37,7 @@ import threading
 # -------------------------------------------------------------------------------
 APP_NAME = "Ffmpeg encoder"
 # Qdialogue filter
-VIDEO_FILTER = "Videos(*.mp4 *.mkv *.avi *.mov *.gif)"
+VIDEO_FILTER = "Videos(*.mp4 *.mkv *.avi *.mov *.gif *.3gp)"
 SUB_FILTER = "Subtitle(*.srt *.ass *.sub)"
 GIF_FILTER = "GIF(*.gif)"
 PLAY_PAUSE_STATE = 0
@@ -60,11 +62,40 @@ def time_edit_format(_time):
     return QTime.fromString(_time, "HH:mm:ss")
 
 
+class CustomTitleBar(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setAutoFillBackground(True)
+        palette = self.palette()
+        palette.setColor(
+            QPalette.Window, QColor(0, 122, 204)
+        )  # Customize title bar background color
+        self.setPalette(palette)
+
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self.minimize_button = QPushButton("Minimize")
+        self.minimize_button.clicked.connect(self.window().showMinimized)
+        layout.addWidget(self.minimize_button)
+
+        self.close_button = QPushButton("Close")
+        self.close_button.clicked.connect(self.window().close)
+        layout.addWidget(self.close_button)
+
+        self.setLayout(layout)
+
+
 class VideoWindow(QMainWindow):
-    def __init__(self, app, parent=None):
-        super(VideoWindow, self).__init__(parent)
+    def __init__(self):
+        super().__init__()
+        self.setupUI()
+
+    def setupUI(self):
         self.setFixedSize(640, 480)
         self.setWindowTitle(APP_NAME)
+        title_bar = ModernWindow(CustomTitleBar())
+        self.setMenuWidget(title_bar)
 
         self.media_info = media_info.MediaInfo()
 
@@ -129,6 +160,13 @@ class VideoWindow(QMainWindow):
 
         encode_menu = menu_bar.addMenu("&Encode")
         encode_menu.setStatusTip("Convert video to another format")
+
+        # Create lossless encoding action
+        lossless_action = QAction("Lossless MP4", self)
+        lossless_action.setStatusTip("Lossless MP4")
+        lossless_action.triggered.connect(self.lossless_mp4)
+
+        encode_menu.addAction(lossless_action)
 
         web_mp4_action = QAction("Web MP4", self)
         web_mp4_action.setStatusTip("Sharable MP4 on the web")
@@ -341,6 +379,24 @@ class VideoWindow(QMainWindow):
         self.video_player.durationChanged.connect(self.duration_changed)
         # self.media_player.error.connect(self.handle_error)
 
+    def set_subtitle(self, subtitle_path):
+        self.label_subtitle_location.setText(subtitle_path)
+        self.media_info.subtitle_location = subtitle_path
+
+    def check_and_set_subtitle(self):
+        file_path = Path(self.media_info.file_location)
+        base_name = file_path.with_suffix("")
+
+        subtitle_extensions = [".srt", ".ass"]
+
+        for extension in subtitle_extensions:
+            subtitle_path = base_name.with_suffix(extension)
+            if subtitle_path.exists():
+                self.set_subtitle(str(subtitle_path))
+                return
+
+        self.label_subtitle_location.setText("No subtitle found")
+
     def set_media(self):
         global PLAY_PAUSE_STATE
         if self.media_info.file_location != "":
@@ -355,13 +411,7 @@ class VideoWindow(QMainWindow):
             """for track in self.video_player.subtitleTracks():
                 print(f"{track=}")"""
 
-            if os.path.isfile(f"{self.media_info.file_location[:-4]}.srt"):
-                self.label_subtitle_location.setText(
-                    f"{self.media_info.file_location[:-4]}.srt"
-                )
-                self.media_info.subtitle_location = (
-                    f"{self.media_info.file_location[:-4]}.srt"
-                )
+            self.check_and_set_subtitle()
 
     def browse_video(self):
         return QFileDialog.getOpenFileName(
@@ -528,6 +578,18 @@ class VideoWindow(QMainWindow):
             )
             _export_frames_thread.start()
 
+    def lossless_mp4(self):
+        _output = self.save_video(VIDEO_FILTER)
+        if _output:
+            _lossless_mp4_thread = threading.Thread(
+                target=encoding.lossless_mp4,
+                args=(
+                    self.media_info.file_location,
+                    _output,
+                ),
+            )
+            _lossless_mp4_thread.start()
+
     def encode_web_mp4(self):
         _output = self.save_video(VIDEO_FILTER)
         if _output:
@@ -552,7 +614,7 @@ class VideoWindow(QMainWindow):
         _media_folder = self.select_folder()
         if _media_folder:
             _batch_extract_subs_thread = threading.Thread(
-                target=encoding.batch_extract_susbs,
+                target=encoding.batch_extract_subtitles,
                 args=(_media_folder, self.media_info.subtitle_channel),
             )
             _batch_extract_subs_thread.start()
@@ -562,7 +624,7 @@ class VideoWindow(QMainWindow):
         if _output:
             _subs_status = "internal"
             _trim_presets_thread = threading.Thread(
-                target=encoding.trim_preset,
+                target=encoding.trim_preset_new,
                 args=(
                     self.media_info.file_location,
                     self.media_info.subtitle_location,
@@ -582,7 +644,7 @@ class VideoWindow(QMainWindow):
             self.media_info.subtitle_location = self.select_subtitle()
             _subs_status = "external"
             _trim_presets_thread = threading.Thread(
-                target=encoding.trim_preset,
+                target=encoding.trim_preset_new,
                 args=(
                     self.media_info.file_location,
                     self.media_info.subtitle_location,
