@@ -17,12 +17,12 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
     QSpinBox,
+    QComboBox,
     QDateTimeEdit,
     QTimeEdit,
     QInputDialog,
 )
 from PySide6.QtGui import QIcon, QAction, QColor, QPalette
-from qtmodern.windows import ModernWindow
 
 
 import datetime
@@ -64,28 +64,371 @@ def time_edit_format(_time):
     return QTime.fromString(_time, "HH:mm:ss")
 
 
-class CustomTitleBar(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.setAutoFillBackground(True)
-        palette = self.palette()
-        palette.setColor(
-            QPalette.Window, QColor(0, 122, 204)
-        )  # Customize title bar background color
-        self.setPalette(palette)
+def get_modern_stylesheet():
+    """Returns a modern dark theme stylesheet for the application"""
+    return """
+    /* Main Window */
+    QMainWindow {
+        background-color: #1E1E1E;
+        color: #E0E0E0;
+    }
+    
+    /* Menu Bar */
+    QMenuBar {
+        background-color: #252525;
+        color: #E0E0E0;
+        border-bottom: 1px solid #3A3A3A;
+        padding: 4px;
+        font-size: 13px;
+    }
+    
+    QMenuBar::item {
+        background-color: transparent;
+        padding: 6px 12px;
+        border-radius: 4px;
+    }
+    
+    QMenuBar::item:selected {
+        background-color: #3A3A3A;
+    }
+    
+    QMenuBar::item:pressed {
+        background-color: #4A4A4A;
+    }
+    
+    /* Menu Dropdown */
+    QMenu {
+        background-color: #2D2D2D;
+        color: #E0E0E0;
+        border: 1px solid #3A3A3A;
+        border-radius: 6px;
+        padding: 4px;
+    }
+    
+    QMenu::item {
+        padding: 8px 24px 8px 32px;
+        border-radius: 4px;
+    }
+    
+    QMenu::item:selected {
+        background-color: #3A3A3A;
+    }
+    
+    QMenu::separator {
+        height: 1px;
+        background-color: #3A3A3A;
+        margin: 4px 8px;
+    }
+    
+    /* Labels */
+    QLabel {
+        color: #E0E0E0;
+        background-color: transparent;
+        font-size: 13px;
+    }
+    
+    /* File location labels - slightly muted */
+    QLabel[class="file_info"] {
+        color: #B0B0B0;
+        font-size: 12px;
+    }
+    
+    /* Buttons */
+    QPushButton {
+        background-color: #3A3A3A;
+        color: #E0E0E0;
+        border: none;
+        border-radius: 6px;
+        padding: 8px 16px;
+        font-size: 13px;
+        font-weight: 500;
+        min-height: 32px;
+    }
+    
+    QPushButton:hover {
+        background-color: #4A4A4A;
+    }
+    
+    QPushButton:pressed {
+        background-color: #2A2A2A;
+    }
+    
+    QPushButton:disabled {
+        background-color: #2A2A2A;
+        color: #808080;
+    }
+    
+    /* Play/Pause Button */
+    QPushButton[class="play_button"] {
+        background-color: #0078D4;
+        min-width: 40px;
+        min-height: 40px;
+        border-radius: 20px;
+    }
+    
+    QPushButton[class="play_button"]:hover {
+        background-color: #1084E0;
+    }
+    
+    QPushButton[class="play_button"]:pressed {
+        background-color: #006CBE;
+    }
+    
+    /* Slider */
+    QSlider::groove:horizontal {
+        background-color: #3A3A3A;
+        height: 6px;
+        border-radius: 3px;
+    }
+    
+    QSlider::handle:horizontal {
+        background-color: #0078D4;
+        width: 18px;
+        height: 18px;
+        margin: -6px 0;
+        border-radius: 9px;
+    }
+    
+    QSlider::handle:horizontal:hover {
+        background-color: #1084E0;
+        width: 20px;
+        height: 20px;
+        margin: -7px 0;
+        border-radius: 10px;
+    }
+    
+    QSlider::handle:horizontal:pressed {
+        background-color: #006CBE;
+    }
+    
+    QSlider::sub-page:horizontal {
+        background-color: #0078D4;
+        border-radius: 3px;
+    }
+    
+    /* SpinBox */
+    QSpinBox {
+        background-color: #2D2D2D;
+        color: #E0E0E0;
+        border: 1px solid #3A3A3A;
+        border-radius: 6px;
+        padding: 6px 12px;
+        font-size: 13px;
+        min-width: 80px;
+    }
 
-        layout = QVBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
+    QSpinBox:hover {
+        border-color: #4A4A4A;
+    }
 
-        self.minimize_button = QPushButton("Minimize")
-        self.minimize_button.clicked.connect(self.window().showMinimized)
-        layout.addWidget(self.minimize_button)
+    QSpinBox:focus {
+        border-color: #0078D4;
+        background-color: #252525;
+    }
 
-        self.close_button = QPushButton("Close")
-        self.close_button.clicked.connect(self.window().close)
-        layout.addWidget(self.close_button)
+    QSpinBox::up-button {
+        background-color: #3A3A3A;
+        border-top-right-radius: 6px;
+        width: 20px;
+        border-left: 1px solid #3A3A3A;
+    }
 
-        self.setLayout(layout)
+    QSpinBox::up-button:hover {
+        background-color: #4A4A4A;
+    }
+
+    QSpinBox::up-button:pressed {
+        background-color: #2A2A2A;
+    }
+
+    QSpinBox::down-button {
+        background-color: #3A3A3A;
+        border-bottom-right-radius: 6px;
+        width: 20px;
+        border-left: 1px solid #3A3A3A;
+    }
+
+    QSpinBox::down-button:hover {
+        background-color: #4A4A4A;
+    }
+
+    QSpinBox::down-button:pressed {
+        background-color: #2A2A2A;
+    }
+    
+    /* ComboBox */
+    QComboBox {
+        background-color: #2D2D2D;
+        color: #E0E0E0;
+        border: 1px solid #3A3A3A;
+        border-radius: 6px;
+        padding: 6px 12px;
+        font-size: 13px;
+        min-width: 200px;
+    }
+
+    QComboBox:hover {
+        border-color: #4A4A4A;
+    }
+
+    QComboBox:focus {
+        border-color: #0078D4;
+        background-color: #252525;
+    }
+
+    QComboBox::drop-down {
+        border: none;
+        width: 30px;
+        border-left: 1px solid #3A3A3A;
+        border-top-right-radius: 6px;
+        border-bottom-right-radius: 6px;
+    }
+
+    QComboBox::drop-down:hover {
+        background-color: #4A4A4A;
+    }
+
+    QComboBox QAbstractItemView {
+        background-color: #2D2D2D;
+        color: #E0E0E0;
+        border: 1px solid #3A3A3A;
+        border-radius: 6px;
+        selection-background-color: #3A3A3A;
+        selection-color: #E0E0E0;
+        padding: 4px;
+    }
+
+    QComboBox QAbstractItemView::item {
+        padding: 6px 12px;
+        border-radius: 4px;
+    }
+
+    QComboBox QAbstractItemView::item:hover {
+        background-color: #4A4A4A;
+    }
+
+    QComboBox QAbstractItemView::item:selected {
+        background-color: #0078D4;
+    }
+    
+    /* Time Edit / DateTime Edit */
+    QTimeEdit, QDateTimeEdit {
+        background-color: #2D2D2D;
+        color: #E0E0E0;
+        border: 1px solid #3A3A3A;
+        border-radius: 6px;
+        padding: 6px 12px;
+        font-size: 13px;
+        min-width: 120px;
+    }
+    
+    QTimeEdit:hover, QDateTimeEdit:hover {
+        border-color: #4A4A4A;
+    }
+    
+    QTimeEdit:focus, QDateTimeEdit:focus {
+        border-color: #0078D4;
+        background-color: #252525;
+    }
+    
+    QTimeEdit::up-button, QDateTimeEdit::up-button {
+        background-color: #3A3A3A;
+        border-top-right-radius: 6px;
+        width: 20px;
+        border-left: 1px solid #3A3A3A;
+    }
+    
+    QTimeEdit::up-button:hover, QDateTimeEdit::up-button:hover {
+        background-color: #4A4A4A;
+    }
+    
+    QTimeEdit::down-button, QDateTimeEdit::down-button {
+        background-color: #3A3A3A;
+        border-bottom-right-radius: 6px;
+        width: 20px;
+        border-left: 1px solid #3A3A3A;
+    }
+    
+    QTimeEdit::down-button:hover, QDateTimeEdit::down-button:hover {
+        background-color: #4A4A4A;
+    }
+    
+    /* Video Widget */
+    QVideoWidget {
+        background-color: #000000;
+        border-radius: 8px;
+        border: 1px solid #3A3A3A;
+    }
+    
+    /* Central Widget */
+    QWidget {
+        background-color: #1E1E1E;
+        color: #E0E0E0;
+    }
+    
+    /* Scrollbar (if needed) */
+    QScrollBar:vertical {
+        background-color: #252525;
+        width: 12px;
+        border-radius: 6px;
+    }
+    
+    QScrollBar::handle:vertical {
+        background-color: #4A4A4A;
+        min-height: 30px;
+        border-radius: 6px;
+    }
+    
+    QScrollBar::handle:vertical:hover {
+        background-color: #5A5A5A;
+    }
+    
+    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+        height: 0px;
+    }
+    
+    QScrollBar:horizontal {
+        background-color: #252525;
+        height: 12px;
+        border-radius: 6px;
+    }
+    
+    QScrollBar::handle:horizontal {
+        background-color: #4A4A4A;
+        min-width: 30px;
+        border-radius: 6px;
+    }
+    
+    QScrollBar::handle:horizontal:hover {
+        background-color: #5A5A5A;
+    }
+    
+    QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+        width: 0px;
+    }
+    
+    /* Tooltip */
+    QToolTip {
+        background-color: #2D2D2D;
+        color: #E0E0E0;
+        border: 1px solid #3A3A3A;
+        border-radius: 4px;
+        padding: 4px 8px;
+    }
+    
+    /* Status Bar */
+    QStatusBar {
+        background-color: #252525;
+        color: #E0E0E0;
+        border-top: 1px solid #3A3A3A;
+    }
+    
+    /* File Dialog styling (limited support) */
+    QFileDialog {
+        background-color: #1E1E1E;
+        color: #E0E0E0;
+    }
+    """
 
 
 class VideoWindow(QMainWindow):
@@ -94,10 +437,12 @@ class VideoWindow(QMainWindow):
         self.setupUI()
 
     def setupUI(self):
-        self.setFixedSize(640, 480)
+        self.setMinimumSize(800, 600)
+        self.resize(1000, 700)
         self.setWindowTitle(APP_NAME)
-        title_bar = ModernWindow(CustomTitleBar())
-        self.setMenuWidget(title_bar)
+
+        # Apply modern dark theme stylesheet
+        self.setStyleSheet(get_modern_stylesheet())
 
         self.media_info = media_info.MediaInfo()
 
@@ -264,6 +609,7 @@ class VideoWindow(QMainWindow):
         self.play_button.setEnabled(False)
         self.play_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
         self.play_button.clicked.connect(self.play)
+        self.play_button.setProperty("class", "play_button")
 
         self.position_slider = QSlider(Qt.Horizontal)
         self.position_slider.setRange(0, 0)
@@ -283,31 +629,35 @@ class VideoWindow(QMainWindow):
         self.label_file_location.setSizePolicy(
             QSizePolicy.Preferred, QSizePolicy.Maximum
         )
-        self.label_file_location.move(100, 100)
+        self.label_file_location.setProperty("class", "file_info")
 
         self.label_subtitle_location = QLabel("No subtitle has been selected", self)
         self.label_subtitle_location.setSizePolicy(
             QSizePolicy.Preferred, QSizePolicy.Maximum
         )
-        self.label_subtitle_location.move(100, 100)
+        self.label_subtitle_location.setProperty("class", "file_info")
 
-        self.label_audio_channel = QLabel("Audio channel: ", self)
+        self.label_audio_channel = QLabel("Audio track: ", self)
         self.label_audio_channel.setSizePolicy(
             QSizePolicy.Preferred, QSizePolicy.Maximum
         )
-        self.audio_channel_select = QSpinBox()
-        self.audio_channel_select.setRange(0, 99)
-        self.audio_channel_select.valueChanged.connect(self.audio_channel_value_change)
+        self.audio_channel_select = QComboBox()
+        self.audio_channel_select.currentIndexChanged.connect(
+            self.audio_channel_value_change
+        )
 
-        self.label_subtitle_channel = QLabel("Subtitle channel: ", self)
+        self.label_subtitle_channel = QLabel("Subtitle track: ", self)
         self.label_subtitle_channel.setSizePolicy(
             QSizePolicy.Preferred, QSizePolicy.Maximum
         )
-        self.subtitle_channel_select = QSpinBox()
-        self.subtitle_channel_select.setRange(0, 99)
-        self.subtitle_channel_select.valueChanged.connect(
+        self.subtitle_channel_select = QComboBox()
+        self.subtitle_channel_select.currentIndexChanged.connect(
             self.subtitle_channel_value_change
         )
+
+        # Store track data for index mapping
+        self.audio_tracks = []
+        self.subtitle_tracks = []
 
         self.label_trim_start = QLabel("Trim start:", self)
         self.label_trim_start.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
@@ -318,30 +668,34 @@ class VideoWindow(QMainWindow):
         self.error_label = QLabel()
         self.error_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
 
-        menu_bar = self.menuBar()
-
         # creating trim start widget
         self.trim_start_date_time_edit = QTimeEdit(self)
         self.trim_start_date_time_edit.dateTimeChanged.connect(
             self.trim_start_value_change
         )
         self.trim_start_date_time_edit.setDisplayFormat("hh:mm:ss")
-        # setting geometry
-        self.trim_start_date_time_edit.setGeometry(100, 100, 150, 35)
-        # setting date time to it
-        # trim_start_date_time_edit.setDateTime(QDateTime(2020, 10, 10, 11, 30))
-        # time
         time = QTime(0, 0, 0)
-        # setting only time
         self.trim_start_date_time_edit.setTime(time)
 
         # creating trim end widget
         self.trim_end_date_time_edit = QTimeEdit(self)
         self.trim_end_date_time_edit.dateTimeChanged.connect(self.trim_end_value_change)
         self.trim_end_date_time_edit.setDisplayFormat("hh:mm:ss")
-        self.trim_end_date_time_edit.setGeometry(100, 100, 150, 35)
         time = QTime(0, 0, 0)
         self.trim_end_date_time_edit.setTime(time)
+
+        # Create buttons to set start and end times from current video position
+        self.set_start_time_button = QPushButton("Set Start", self)
+        self.set_start_time_button.setToolTip(
+            "Set start time to current video position"
+        )
+        self.set_start_time_button.clicked.connect(self.set_start_time_from_position)
+        self.set_start_time_button.setEnabled(False)
+
+        self.set_end_time_button = QPushButton("Set End", self)
+        self.set_end_time_button.setToolTip("Set end time to current video position")
+        self.set_end_time_button.clicked.connect(self.set_end_time_from_position)
+        self.set_end_time_button.setEnabled(False)
 
         # Create a widget for window contents
         wid = QWidget(self)
@@ -349,7 +703,8 @@ class VideoWindow(QMainWindow):
 
         # Create layouts to place inside widget
         control_layout = QHBoxLayout()
-        control_layout.setContentsMargins(0, 0, 0, 0)
+        control_layout.setContentsMargins(12, 8, 12, 8)
+        control_layout.setSpacing(12)
         control_layout.addWidget(self.play_button)
         control_layout.addWidget(self.label_current_time)
         control_layout.addWidget(self.position_slider)
@@ -357,19 +712,22 @@ class VideoWindow(QMainWindow):
 
         # Create layouts to place inside widget
         choices_first_row_horizontal_layout = QHBoxLayout()
-        # choices_first_row_horizontal_layout.setSpacing(10)
-        # choices_first_row_horizontal_layout.addStretch()
-        choices_first_row_horizontal_layout.setContentsMargins(10, 1, 10, 1)
+        choices_first_row_horizontal_layout.setSpacing(12)
+        choices_first_row_horizontal_layout.setContentsMargins(12, 8, 12, 8)
         choices_first_row_horizontal_layout.addWidget(self.label_trim_start)
         choices_first_row_horizontal_layout.addWidget(self.trim_start_date_time_edit)
+        choices_first_row_horizontal_layout.addWidget(self.set_start_time_button)
+        choices_first_row_horizontal_layout.addStretch()
         choices_first_row_horizontal_layout.addWidget(self.label_audio_channel)
         choices_first_row_horizontal_layout.addWidget(self.audio_channel_select)
 
         choices_second_row_horizontal_layout = QHBoxLayout()
-        choices_second_row_horizontal_layout.setContentsMargins(10, 1, 10, 1)
+        choices_second_row_horizontal_layout.setSpacing(12)
+        choices_second_row_horizontal_layout.setContentsMargins(12, 8, 12, 8)
         choices_second_row_horizontal_layout.addWidget(self.label_trim_end)
         choices_second_row_horizontal_layout.addWidget(self.trim_end_date_time_edit)
-
+        choices_second_row_horizontal_layout.addWidget(self.set_end_time_button)
+        choices_second_row_horizontal_layout.addStretch()
         choices_second_row_horizontal_layout.addWidget(self.label_subtitle_channel)
         choices_second_row_horizontal_layout.addWidget(self.subtitle_channel_select)
 
@@ -378,12 +736,13 @@ class VideoWindow(QMainWindow):
         channel_select_layout.addLayout(choices_second_row_horizontal_layout)
 
         layout = QVBoxLayout()
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(12)
         layout.addWidget(self.label_file_location)
         layout.addWidget(self.label_subtitle_location)
         layout.addWidget(video_widget)
         layout.addLayout(control_layout)
         layout.addLayout(channel_select_layout)
-        layout.addWidget(self.trim_start_date_time_edit)
         layout.addWidget(self.error_label)
 
         # Set widget to contain window contents
@@ -411,7 +770,7 @@ class VideoWindow(QMainWindow):
                 self.set_subtitle(str(subtitle_path))
                 return
 
-        self.label_subtitle_location.setText("No subtitle found")
+        self.label_subtitle_location.setText("No external subtitle found")
 
     def set_media(self):
         global PLAY_PAUSE_STATE
@@ -422,6 +781,14 @@ class VideoWindow(QMainWindow):
             self.label_file_location.setText(self.media_info.file_location)
             self.play_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPause))
             PLAY_PAUSE_STATE = 0
+
+            # Enable set time buttons when media is loaded
+            self.set_start_time_button.setEnabled(True)
+            self.set_end_time_button.setEnabled(True)
+
+            # Load audio and subtitle tracks
+            self.load_audio_tracks()
+            self.load_subtitle_tracks()
 
             # self.video_player.setActiveSubtitleTrack(0)
             """for track in self.video_player.subtitleTracks():
@@ -508,11 +875,65 @@ class VideoWindow(QMainWindow):
     def set_position(self, position):
         self.video_player.setPosition(position)
 
-    def audio_channel_value_change(self, value):
-        self.media_info.audio_channel = value
+    def load_audio_tracks(self):
+        """Load audio tracks from the current video file and populate the combobox."""
+        if not self.media_info.file_location:
+            return
 
-    def subtitle_channel_value_change(self, value):
-        self.media_info.subtitle_channel = value
+        self.audio_tracks = encoding.get_audio_tracks(self.media_info.file_location)
+        self.audio_channel_select.clear()
+
+        if self.audio_tracks:
+            for track in self.audio_tracks:
+                self.audio_channel_select.addItem(track["display_name"], track["index"])
+            # Set default to first track
+            self.audio_channel_select.setCurrentIndex(0)
+            if self.audio_tracks:
+                self.media_info.audio_channel = self.audio_tracks[0]["index"]
+        else:
+            # Fallback if no tracks found
+            self.audio_channel_select.addItem("No audio tracks", 0)
+            self.media_info.audio_channel = 0
+
+    def load_subtitle_tracks(self):
+        """Load subtitle tracks from the current video file and populate the combobox."""
+        if not self.media_info.file_location:
+            return
+
+        self.subtitle_tracks = encoding.get_subtitle_tracks(
+            self.media_info.file_location
+        )
+        self.subtitle_channel_select.clear()
+
+        if self.subtitle_tracks:
+            for track in self.subtitle_tracks:
+                self.subtitle_channel_select.addItem(
+                    track["display_name"], track["index"]
+                )
+            # Set default to first track
+            self.subtitle_channel_select.setCurrentIndex(0)
+            if self.subtitle_tracks:
+                self.media_info.subtitle_channel = self.subtitle_tracks[0]["index"]
+        else:
+            # Fallback if no tracks found
+            self.subtitle_channel_select.addItem("No subtitle tracks", 0)
+            self.media_info.subtitle_channel = 0
+
+    def audio_channel_value_change(self, index):
+        """Handle audio track selection change."""
+        if index >= 0:
+            track_index = self.audio_channel_select.itemData(index)
+            if track_index is not None:
+                self.media_info.audio_channel = int(track_index)
+                print(f"Selected audio track index: {track_index}")
+
+    def subtitle_channel_value_change(self, index):
+        """Handle subtitle track selection change."""
+        if index >= 0:
+            track_index = self.subtitle_channel_select.itemData(index)
+            if track_index is not None:
+                self.media_info.subtitle_channel = int(track_index)
+                print(f"Selected subtitle track index: {track_index}")
 
     def trim_start_value_change(self, value):
         self.media_info.trim_start = trim_time_format(value)
@@ -522,6 +943,26 @@ class VideoWindow(QMainWindow):
         self.media_info.trim_end = trim_time_format(value)
         print(f"{self.media_info.trim_end=}")
 
+    def set_start_time_from_position(self):
+        """Set the start time to the current video position."""
+        current_position = self.video_player.position()
+        if current_position >= 0:
+            # Convert position (milliseconds) to time string, then to QTime
+            time_str = time_select_format(current_position)
+            qtime = time_edit_format(time_str)
+            self.trim_start_date_time_edit.setTime(qtime)
+            # The value change will trigger trim_start_value_change automatically
+
+    def set_end_time_from_position(self):
+        """Set the end time to the current video position."""
+        current_position = self.video_player.position()
+        if current_position >= 0:
+            # Convert position (milliseconds) to time string, then to QTime
+            time_str = time_select_format(current_position)
+            qtime = time_edit_format(time_str)
+            self.trim_end_date_time_edit.setTime(qtime)
+            # The value change will trigger trim_end_value_change automatically
+
     def handle_error(self):
         self.play_button.setEnabled(False)
         self.error_label.setText("Error: " + self.video_player.errorString())
@@ -530,12 +971,49 @@ class VideoWindow(QMainWindow):
         _output = self.save_video(GIF_FILTER)
         if _output:
             _to_gif_thread = threading.Thread(
-                target=encoding.to_gif, args=(self.media_info.file_location, _output)
+                target=encoding.to_gif,
+                args=(
+                    self.media_info.file_location,
+                    _output,
+                    self.media_info.trim_start,
+                    self.media_info.trim_end,
+                ),
             )
             _to_gif_thread.start()
 
     def extract_subtitle(self):
-        _output = self.save_video(SUB_FILTER)
+        if self.media_info.file_location == "":
+            print("No media selected")
+            self.media_info.file_location = self.browse_video()
+
+        if not self.media_info.file_location:
+            return
+
+        # Automatically infer subtitle format
+        subtitle_format = encoding.get_subtitle_format(
+            self.media_info.file_location, self.media_info.subtitle_channel
+        )
+
+        # Create filter based on detected format
+        if subtitle_format:
+            subtitle_filter = f"Subtitle(*.{subtitle_format})"
+            # Create default filename with correct extension
+            input_path = Path(self.media_info.file_location)
+            default_filename = f"{input_path.stem}.{subtitle_format}"
+        else:
+            # Fallback to generic filter if format detection fails
+            subtitle_filter = SUB_FILTER
+            input_path = Path(self.media_info.file_location)
+            default_filename = f"{input_path.stem}.srt"
+
+        # Get save location with inferred format
+        _output = QFileDialog.getSaveFileName(
+            self,
+            "Save Subtitle File",
+            str(Path(self.media_info.file_location).parent / default_filename),
+            subtitle_filter,
+        )[0]
+
         if _output:
             _extract_subs_thread = threading.Thread(
                 target=encoding.extract_subtitle,
@@ -584,6 +1062,8 @@ class VideoWindow(QMainWindow):
                         _output,
                         self.number_of_loops,
                         _gif_flag,
+                        self.media_info.trim_start,
+                        self.media_info.trim_end,
                     ),
                 )
                 _loop_video_thread.start()
@@ -596,6 +1076,8 @@ class VideoWindow(QMainWindow):
                 args=(
                     self.media_info.file_location,
                     _media_folder,
+                    self.media_info.trim_start,
+                    self.media_info.trim_end,
                 ),
             )
             _export_frames_thread.start()
@@ -608,6 +1090,8 @@ class VideoWindow(QMainWindow):
                 args=(
                     self.media_info.file_location,
                     _output,
+                    self.media_info.trim_start,
+                    self.media_info.trim_end,
                 ),
             )
             _lossless_mp4_thread.start()
@@ -620,6 +1104,8 @@ class VideoWindow(QMainWindow):
                 args=(
                     self.media_info.file_location,
                     _output,
+                    self.media_info.trim_start,
+                    self.media_info.trim_end,
                 ),
             )
             _encode_web_mp4_thread.start()
@@ -760,6 +1246,8 @@ class VideoWindow(QMainWindow):
                     self.media_info.file_location,
                     _output,
                     self.media_info.subtitle_channel,
+                    self.media_info.trim_start,
+                    self.media_info.trim_end,
                 ),
             )
             burn_internal_subs_thread.start()
@@ -774,15 +1262,22 @@ class VideoWindow(QMainWindow):
                 args=(
                     self.media_info.file_location,
                     _output,
+                    self.media_info.subtitle_location,
+                    self.media_info.trim_start,
+                    self.media_info.trim_end,
                 ),
-                kwargs={"_subtitle_path": self.media_info.subtitle_location},
             )
             burn_external_subs_thread.start()
 
     def extract_audio(self):
         output_path = self.save_video(_filters="Audio Files (*.mp3 *.wav *.ogg)")
         if output_path:
-            encoding.extract_audio(self.media_info.file_location, output_path)
+            encoding.extract_audio(
+                self.media_info.file_location,
+                output_path,
+                self.media_info.trim_start,
+                self.media_info.trim_end,
+            )
 
     def image_audio_to_video(self):
         # Select image file
