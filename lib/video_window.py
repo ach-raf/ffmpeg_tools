@@ -40,6 +40,8 @@ APP_NAME = "Ffmpeg encoder"
 VIDEO_FILTER = "Videos(*.mp4 *.mkv *.avi *.mov *.gif *.3gp)"
 SUB_FILTER = "Subtitle(*.srt *.ass *.sub)"
 GIF_FILTER = "GIF(*.gif)"
+IMAGE_FILTER = "Images(*.jpg *.jpeg *.png *.bmp *.tiff *.webp)"
+AUDIO_FILTER = "Audio(*.wav *.mp3 *.flac *.aac *.ogg)"
 PLAY_PAUSE_STATE = 0
 # -------------------------------------------------------------------------------
 
@@ -244,6 +246,20 @@ class VideoWindow(QMainWindow):
         presets_menu.addAction(trim_internal_preset_action)
         presets_menu.addAction(trim_external_preset_action)
 
+        # Add extract audio action
+        extract_audio_action = QAction("Extract Audio Only", self)
+        extract_audio_action.setStatusTip("Extract audio from video")
+        extract_audio_action.triggered.connect(self.extract_audio)
+        encoding_menu.addAction(extract_audio_action)
+
+        # Add image+audio to video action
+        image_audio_to_video_action = QAction("Image + Audio to Video", self)
+        image_audio_to_video_action.setStatusTip(
+            "Create video from image and audio file"
+        )
+        image_audio_to_video_action.triggered.connect(self.image_audio_to_video)
+        encoding_menu.addAction(image_audio_to_video_action)
+
         self.play_button = QPushButton()
         self.play_button.setEnabled(False)
         self.play_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
@@ -432,6 +448,12 @@ class VideoWindow(QMainWindow):
         return QFileDialog.getOpenFileName(
             self, "Select Subtitle", self.media_info.file_location, SUB_FILTER
         )[0]
+
+    def select_image(self):
+        return QFileDialog.getOpenFileName(self, "Select Image", "", IMAGE_FILTER)[0]
+
+    def select_audio(self):
+        return QFileDialog.getOpenFileName(self, "Select Audio", "", AUDIO_FILTER)[0]
 
     def save_video(self, _filters=VIDEO_FILTER):
         if self.media_info.file_location == "":
@@ -756,3 +778,31 @@ class VideoWindow(QMainWindow):
                 kwargs={"_subtitle_path": self.media_info.subtitle_location},
             )
             burn_external_subs_thread.start()
+
+    def extract_audio(self):
+        output_path = self.save_video(_filters="Audio Files (*.mp3 *.wav *.ogg)")
+        if output_path:
+            encoding.extract_audio(self.media_info.file_location, output_path)
+
+    def image_audio_to_video(self):
+        # Select image file
+        image_path = self.select_image()
+        if not image_path:
+            return
+
+        # Select audio file
+        audio_path = self.select_audio()
+        if not audio_path:
+            return
+
+        # Select output video file
+        output_path = self.save_video(VIDEO_FILTER)
+        if not output_path:
+            return
+
+        # Start conversion in a separate thread
+        image_audio_thread = threading.Thread(
+            target=encoding.image_audio_to_video,
+            args=(image_path, audio_path, output_path),
+        )
+        image_audio_thread.start()

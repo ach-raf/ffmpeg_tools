@@ -1,4 +1,5 @@
 import os
+import json
 import subprocess
 from shutil import copyfile
 from datetime import datetime
@@ -99,26 +100,34 @@ def get_video_duration(video_file: str) -> float:
         return 0.0
 
 
-def get_subtitle_format(input_file: str, subtitle_channel=0) -> str:
-    ffprobe_command = [
-        FFMPEG_PATH,
-        "-i",
+def get_subtitle_format(input_file: str, subtitle_stream_index=0) -> str:
+    ffprobe_cmd = [
+        "ffprobe",
+        "-v",
+        "quiet",
+        "-print_format",
+        "json",
+        "-show_streams",
+        "-select_streams",
+        f"s:{subtitle_stream_index}",
         input_file,
-        "-map",
-        f"0:s:{subtitle_channel}",
-        "-c",
-        "copy",
-        "-f",
-        "null",
-        "-",
     ]
 
-    result = subprocess.run(ffprobe_command, capture_output=True, text=True)
+    try:
+        result = subprocess.run(
+            ffprobe_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True
+        )
+        stream_info = json.loads(result.stdout)["streams"][0]
+        codec_name = stream_info["codec_name"]
 
-    if "subtitle: ass" in result.stderr.lower():
-        return "ass"
-    else:
-        return "srt"
+        if codec_name == "ass":
+            return "ass"
+        elif codec_name == "subrip":
+            return "srt"
+        else:
+            return codec_name
+    except (subprocess.CalledProcessError, IndexError, json.JSONDecodeError):
+        return None
 
 
 def calculate_duration(_end_time, _start_time):
@@ -147,17 +156,16 @@ def lossless_mp4(_input, _output):
     print("Process lossless_mp4 finished!")
 
 
-def encode_web_mp4(input_file, output_file):
+def encode_web_mp4(input_file: Path, output_file: Path):
     # Ensure the output file has the correct .mp4 extension
-    output_base_path, output_file_name = os.path.split(output_file)
-    output_file_name = f"{os.path.splitext(output_file_name)[0]}.mp4"
-    output_file = os.path.join(output_base_path, output_file_name)
+    output_file_name = f"{output_file.stem}.mp4"
+    output_file = output_file.with_name(output_file_name)
 
     # ffmpeg command to create an mp4 file that can be shared on the web, mobile...
     encode_task = [
         FFMPEG_PATH,
         "-i",
-        input_file,
+        str(input_file),
         "-map_metadata",
         "0",
         "-movflags",
@@ -190,7 +198,7 @@ def encode_web_mp4(input_file, output_file):
         "0",
         "-f",
         "mp4",
-        output_file,
+        str(output_file),
     ]
 
     print("Processing encode_web_mp4")
@@ -229,28 +237,44 @@ def extract_subtitle(_input, _output, subtitle_channel=0):
 
 def burn_subtitles(_input, _output, _subtitle_path):
     _subtitle_path = Path(_subtitle_path)
-
-    # -filter_complex in ffmpeg needs special escape rules, for a path like c:\clips\clip.mkv it needs to be, c\:\\clips\\clip.mkv
-    _subtitles_filter_path = (
-        str(_subtitle_path.absolute()).replace("\\", "\\\\").replace(":", "\:")
-    )
-    print(f"{_subtitles_filter_path=}")
+    
+    if not _subtitle_path.exists():
+        print(f"Error: Subtitle file not found: {_subtitle_path}")
+        return
+    
+    # Convert paths to strings and ensure proper format
+    input_path = str(_input)
+    output_path = str(_output)
+    subtitle_file = str(_subtitle_path.absolute())
+    
+    # Use filter_complex with proper path escaping for Windows
+    # Replace backslashes with forward slashes and escape special characters
+    escaped_subtitle_path = subtitle_file.replace('\\', '/').replace(':', '\\:')
+    
     _task = [
-        FFMPEG_PATH,
+        str(FFMPEG_PATH),
         "-i",
-        _input,
-        #'-vf', f"subtitles={_temp_subtitle}:force_style='Fontsize=6'",
-        "-vf",
-        f"subtitles={_subtitles_filter_path}",
+        input_path,
+        "-filter_complex",
+        f"[0:v]subtitles='{escaped_subtitle_path}'[v]",
+        "-map",
+        "[v]",
+        "-map",
+        "0:a?",
         "-preset",
-        f"{COMPRESSION_RATIO}",
+        str(COMPRESSION_RATIO),
         "-c:a",
         "copy",
-        _output,
+        output_path,
     ]
+    print(f"Burning subtitles from: {_subtitle_path}")
     print("Starting burn_subtitles")
-    subprocess.run(_task)
-    print("Subtitles burned!")
+    try:
+        subprocess.run(_task, check=True)
+        print("Subtitles burned!")
+    except subprocess.CalledProcessError as e:
+        print(f"Error burning subtitles: {e}")
+        raise
 
 
 def to_gif(_input, _output):
@@ -303,9 +327,7 @@ def video_to_frames(_input, _output):
         FFMPEG_PATH,
         "-i",
         _input,
-        "-vf",
-        "fps=1",
-        f"{ os.path.join(_output, 'out%d.png')}",
+        f"{os.path.join(_output, 'out-%03d.png')}",
     ]
     print("Starting video_to_frames")
     subprocess.run(_task)
@@ -386,7 +408,7 @@ def trim_with_hard_subs(
     _output,
     video_channel=0,
     audio_channel=0,
-    subtitle_channel=0,
+    subtitles_channel=0,
     subtitles_path=None,
 ):
     """
@@ -409,16 +431,14 @@ def trim_with_hard_subs(
     if not subtitles_path:
         # internal subs
         subtitles_path = extract_subtitle(
-            _video_input, _temp_subtitle.absolute().as_posix(), subtitle_channel
+            _video_input, _temp_subtitle.absolute().as_posix(), subtitles_channel
         )
     else:
         # external subs
         copyfile(subtitles_path, _temp_subtitle.absolute().as_posix())
 
-    # -filter_complex in ffmpeg needs special escape rules, for a path like c:\clips\clip.mkv it needs to be, c\:\\clips\\clip.mkv
-    _subtitles_filter_path = (
-        str(_temp_subtitle.absolute()).replace("\\", "\\\\").replace(":", "\:")
-    )
+    # Convert to forward slashes which FFmpeg handles well on Windows
+    _subtitles_filter_path = str(_temp_subtitle.absolute()).replace("\\", "/")
     print(f"{_subtitles_filter_path=}")
     trim_with_subs_task = [
         FFMPEG_PATH,
@@ -429,14 +449,13 @@ def trim_with_hard_subs(
         "-copyts",
         "-i",
         _video_input,
-        #'-vf', f"subtitles={_temp_subtitle}:force_style='Fontsize=6'",
-        "-filter_complex",
-        f"subtitles='{_subtitles_filter_path}:force_style='Fontsize=18'",
+        "-vf",
+        f"subtitles='{_subtitles_filter_path}'",
         "-map",
         f"0:v:{video_channel}?",
         "-map",
         f"0:a:{audio_channel}?",
-        # new addition, trying to change 5.1 audio to stereo
+        # Convert 5.1 audio to stereo
         "-ac",
         "2",
         "-c:a",
@@ -445,11 +464,6 @@ def trim_with_hard_subs(
         "320k",
         "-ar",
         "48000",
-        # till here
-        "-c:s",
-        "copy",
-        "-c:a",
-        "copy",
         "-ss",
         _start,
         _output,
@@ -570,6 +584,111 @@ def convert_3gp_to_mp4(input_file, output_file):
         print(f"Error during conversion: {e}")
 
 
+def extract_audio(_input, _output):
+    """
+    Extract audio from video file.
+
+    Args:
+        _input: Input video file path
+        _output: Output audio file path (e.g. output.mp3)
+    """
+    output_ext = Path(_output).suffix.lower()
+
+    # Base command
+    _task = [
+        FFMPEG_PATH,
+        "-i",
+        _input,
+        "-vn",  # Disable video
+    ]
+
+    # Add format-specific encoding parameters
+    if output_ext == ".mp3":
+        _task.extend(
+            [
+                "-c:a",
+                "libmp3lame",
+                "-q:a",
+                "2",  # VBR quality (0-9, lower is better)
+            ]
+        )
+    elif output_ext == ".wav":
+        _task.extend(
+            [
+                "-c:a",
+                "pcm_s16le",  # Standard 16-bit PCM
+            ]
+        )
+    elif output_ext == ".ogg":
+        _task.extend(
+            [
+                "-c:a",
+                "libvorbis",
+                "-q:a",
+                "4",  # Quality scale (0-10)
+            ]
+        )
+    else:
+        _task.extend(["-c:a", "copy"])  # Default to stream copy for other formats
+
+    _task.append(_output)
+
+    print("Starting audio extraction...")
+    try:
+        subprocess.run(_task, check=True)
+        print("Audio extraction complete!")
+    except subprocess.CalledProcessError as e:
+        print(f"Error during audio extraction: {e}")
+        raise
+
+
+def image_audio_to_video(image_path, audio_path, output_path):
+    """
+    Create a video from a single image and audio file.
+    The video duration will match the audio duration.
+
+    Args:
+        image_path (str): Path to the input image file
+        audio_path (str): Path to the input audio file
+        output_path (str): Path to the output video file
+    """
+    # Get audio duration to determine video length
+    audio_duration = get_video_duration(audio_path)
+    
+    if audio_duration <= 0:
+        print("Error: Could not determine audio duration")
+        return
+
+    # FFmpeg command to create video from image and audio
+    task = [
+        FFMPEG_PATH,
+        "-y",  # Overwrite output file without asking
+        "-loop", "1",  # Loop the image
+        "-i", str(image_path),  # Input image
+        "-i", str(audio_path),  # Input audio
+        "-c:v", "libx264",  # Video codec
+        "-tune", "stillimage",  # Optimize for still images
+        "-c:a", "aac",  # Audio codec
+        "-b:a", "192k",  # Audio bitrate
+        "-pix_fmt", "yuv420p",  # Pixel format for compatibility
+        "-shortest",  # End when shortest input ends (audio)
+        "-r", "30",  # Frame rate
+        str(output_path)
+    ]
+
+    print(f"Creating video from image: {image_path}")
+    print(f"Audio file: {audio_path}")
+    print(f"Output: {output_path}")
+    print(f"Duration: {audio_duration:.2f} seconds")
+    
+    try:
+        subprocess.run(task, check=True)
+        print("Image + Audio to Video conversion complete!")
+    except subprocess.CalledProcessError as e:
+        print(f"Error during image+audio to video conversion: {e}")
+        raise
+
+
 def trim_preset(
     _video_location,
     _subs_location,
@@ -617,7 +736,7 @@ def trim_preset(
             _video_location,
             temp_trim_output.absolute().as_posix(),
             audio_channel=_audio_channel,
-            subtitle_channel=_subs_channel,
+            subtitles_channel=_subs_channel,
         )
 
     temp_mp4_output = os.path.join(output_base_path, f"encode_{output_file_name}")
